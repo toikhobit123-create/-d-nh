@@ -125,9 +125,9 @@ object AdventureCatalog {
                 ),
                 MapNode(
                     id = "i_fight_1a", act = 1, row = 2, column = 0, type = NodeType.COMBAT,
-                    title = "Môn Đồ Bóng Đêm", subtitle = "Giao Tranh Lẩn Khuất",
+                    title = "Môn Đồ Bóng Đêm", subtitle = "Giao Tranh Huyền Ảo",
                     enemyName = "Ám Ảnh Kinkou", enemyPowerTitle = "Lối Đi Vô Hình",
-                    enemyPowerDescription = "Bài quân Lẩn Khuất của địch có +1|+0.",
+                    enemyPowerDescription = "Bài quân Huyền Ảo của địch có +1|+0.",
                     enemyMaxHp = 20, enemyStartingMana = 2,
                     enemyDeckCardIds = listOf("card_shadow_assassin", "card_kinkou_student", "card_sumpworks_mapper", "card_steel_tempest"),
                     goldReward = 80, nextNodeIds = listOf("i_event_1")
@@ -209,7 +209,7 @@ object AdventureCatalog {
                     id = "z_fight_1a", act = 1, row = 2, column = 0, type = NodeType.COMBAT,
                     title = "Băng Hóa Chất", subtitle = "Sát Thương & Nấm Độc",
                     enemyName = "Băng Đội Bom", enemyPowerTitle = "Đạn Dược Bất Ổn",
-                    enemyPowerDescription = "Bài quân địch nhận Tác Động 1.",
+                    enemyPowerDescription = "Bài quân địch nhận Khí Lực 1.",
                     enemyMaxHp = 26, enemyStartingMana = 2,
                     enemyDeckCardIds = listOf("card_boomcrew_rookie", "card_zaunite_urchin", "card_mystic_shot", "card_teemo_puffcaps"),
                     goldReward = 95, nextNodeIds = listOf("z_chest_1")
@@ -301,7 +301,7 @@ object AdventureCatalog {
                     id = "t_fight_1b", act = 1, row = 2, column = 2, type = NodeType.ELITE_COMBAT,
                     title = "Oan Hồn Bóng Tối", subtitle = "Bất Tử & Đáng Sợ",
                     enemyName = "Quân Đoàn Bóng Ma", enemyPowerTitle = "Nỗi Kinh Hoàng Bất Tử",
-                    enemyPowerDescription = "Địch khởi đầu 4 Năng Lượng kèm cộng dồn Thiêng Liêng.",
+                    enemyPowerDescription = "Địch khởi đầu 4 Năng Lượng.",
                     enemyMaxHp = 35, enemyStartingMana = 4,
                     enemyDeckCardIds = listOf("card_rekindled_knight", "card_spectral_ironhound", "card_void_abomination", "card_flash_freeze"),
                     goldReward = 135, nextNodeIds = listOf("t_shop_1")
@@ -343,6 +343,85 @@ object AdventureCatalog {
                     enemyMaxHp = 60, enemyStartingMana = 4,
                     enemyDeckCardIds = listOf("card_aurelion_sol", "card_rekindled_knight", "card_void_abomination", "card_radiant_guardian", "card_golden_aegis"),
                     goldReward = 500, nextNodeIds = emptyList()
+                )
+            )
+        ),
+        AdventureConfig(
+            id = "adv_shadow_isles_5star",
+            name = "Quần Đảo Bóng Đêm — Fiora & Viego",
+            region = Region.SHADOW_ISLES,
+            starRating = 5.0f,
+            difficultyLabel = "5.0★ Thử Nghiệm",
+            description = "Map thử nghiệm 5★: Chọn liên tiếp 2 Sức Mạnh rồi đối đầu Trùm Phụ Fiora và Trùm Cuối Viego dưới hiệu ứng Chí Tử & Sương Biến Ảo.",
+            bossName = "Viego, Hắc Diệt Đế Vương",
+            rewardXp = 1500,
+            rewardFragments = 50,
+            mutators = listOf(
+                GlobalMutator(
+                    id = "mut_deadly",
+                    name = "Chí Tử",
+                    description = "Sử Thi: Khi Địch triệu hồi 1 bài quân, ban thêm nửa chỉ số hiện tại (làm tròn lên). Bài phép & kỹ năng Địch gây x2 sát thương."
+                ),
+                GlobalMutator(
+                    id = "mut_shadow_mist",
+                    name = "Sương Biến Ảo",
+                    description = "Sử Thi: Đầu Vòng Đấu, nếu Địch giữ Attack Token, triệu hồi 1 Màn Sương Xâm Chiếm và ban +1|+1 cho mọi Màn Sương Xâm Chiếm ở mọi nơi."
+                )
+            ),
+            mapNodes = listOf(
+                MapNode(
+                    id = "si_start", act = 1, row = 0, column = 1, type = NodeType.START,
+                    title = "Bờ Biển Màn Sương", subtitle = "Khởi đầu thử nghiệm 5★",
+                    nextNodeIds = listOf("si_power_1")
+                ),
+                MapNode(
+                    id = "si_power_1", act = 1, row = 1, column = 1, type = NodeType.POWER_NODE,
+                    title = "Lựa Chọn Sức Mạnh 1", subtitle = "Chọn Sức Mạnh ngẫu nhiên (1/2)",
+                    nextNodeIds = listOf("si_power_2")
+                ),
+                MapNode(
+                    id = "si_power_2", act = 1, row = 2, column = 1, type = NodeType.POWER_NODE,
+                    title = "Lựa Chọn Sức Mạnh 2", subtitle = "Chọn Sức Mạnh ngẫu nhiên (2/2)",
+                    nextNodeIds = listOf("si_midboss_fiora")
+                ),
+                MapNode(
+                    id = "si_midboss_fiora", act = 1, row = 3, column = 1, type = NodeType.MID_BOSS,
+                    title = "Fiora, Nữ Kiếm Sư", subtitle = "Trận 1 (Mini-Boss)",
+                    enemyName = "Fiora",
+                    enemyPowerTitle = "Thời Khắc Đối Đầu",
+                    enemyPowerDescription = "Địch khởi đầu 5 Mana. Khi đồng minh Địch Thách Đấu 1 kẻ địch, ban +2|+2 và Kiên Cường trong vòng này.",
+                    enemyMaxHp = 38,
+                    enemyStartingMana = 5,
+                    enemyDeckCardIds = listOf(
+                        "card_laurent_bladekeeper",
+                        "card_badgerbear",
+                        "card_tiana_crownguard",
+                        "card_tough_poro",
+                        "card_dawnspeakers",
+                        "card_fleetfeather_tracker"
+                    ),
+                    goldReward = 220,
+                    nextNodeIds = listOf("si_boss_viego")
+                ),
+                MapNode(
+                    id = "si_boss_viego", act = 2, row = 4, column = 1, type = NodeType.FINAL_BOSS,
+                    title = "Viego, Hắc Diệt Đế Vương", subtitle = "Trận 2 (Boss Cuối)",
+                    enemyName = "Viego",
+                    enemyPowerTitle = "Hoàng Đế Thống Trị",
+                    enemyPowerDescription = "Địch khởi đầu 5 Mana. Đầu Vòng Đấu: Địch triệu hồi 1 bản sao Cảm Tử của tùy tùng mạnh nhất của bạn hy sinh ở vòng trước.",
+                    enemyMaxHp = 50,
+                    enemyStartingMana = 5,
+                    enemyDeckCardIds = listOf(
+                        "card_hapless_aristocrat",
+                        "card_fading_icon",
+                        "card_camavoran_soldier",
+                        "card_black_spear_custom",
+                        "card_camavoran_dragon",
+                        "card_possession",
+                        "card_invasive_hydravine"
+                    ),
+                    goldReward = 600,
+                    nextNodeIds = emptyList()
                 )
             )
         )

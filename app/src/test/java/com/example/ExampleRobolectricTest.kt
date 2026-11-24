@@ -36,6 +36,7 @@ import com.example.model.UnitOnBoard
 import com.example.ui.components.BattleBoard
 import com.example.ui.theme.PathOfChampionsTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -730,7 +731,7 @@ class ExampleRobolectricTest {
     composeTestRule.waitForIdle()
     composeTestRule.onNodeWithTag("keyword_tooltip_dialog").assertIsDisplayed()
     composeTestRule.onNode(
-      androidx.compose.ui.test.hasText("Chỉ có thể bị chặn bởi một đơn vị có Bóng Ma.")
+      androidx.compose.ui.test.hasText("Chỉ có thể bị chặn bởi một đơn vị có Huyền Ảo.")
     ).assertIsDisplayed()
 
     // Close tooltip and tap Spell Speed badge
@@ -1778,4 +1779,196 @@ class ExampleRobolectricTest {
       .assertTextContains("Không đủ NL Thường", substring = true)
     composeTestRule.onNodeWithTag("confirm_play_card_button").assertIsNotEnabled()
   }
+
+  @Test
+  fun `harshWindsRequiresSelectingTwoEnemiesAndBurstNexusSpellCastsImmediately`() {
+    val adv = AdventureCatalog.getAdventure("adv_demacia_outskirts")
+    val node = adv.mapNodes.first { it.id == "d_fight_1a" }
+    val harshWinds = com.example.model.HandCardInstance(
+      instanceId = "hc_hw",
+      template = CardCatalog.getCard("card_harsh_winds"),
+      effectiveCost = 5
+    )
+    val ignition = com.example.model.HandCardInstance(
+      instanceId = "hc_ign",
+      template = CardCatalog.getCard("card_ignition"),
+      effectiveCost = 0
+    )
+    val e1 = UnitOnBoard("e1", CardCatalog.getCard("card_cithria"), false, 2, 2, 2, emptySet())
+    val e2 = UnitOnBoard("e2", CardCatalog.getCard("card_guardian_follower"), false, 4, 4, 4, emptySet())
+    val e3 = UnitOnBoard("e3", CardCatalog.getCard("card_laurent_protege"), false, 3, 3, 3, emptySet())
+
+    val dispatchedCalls = mutableListOf<Pair<String, String?>>()
+    val combatState = androidx.compose.runtime.mutableStateOf(
+      CombatState(
+        encounterNode = node,
+        adventure = adv,
+        championId = "champ_anivia",
+        starLevel = 2,
+        equippedRelics = emptyList(),
+        activePowers = emptyList(),
+        mutators = emptyList(),
+        round = 5,
+        playerNexusHp = 35,
+        playerMaxHp = 35,
+        enemyNexusHp = 20,
+        enemyMaxHp = 20,
+        playerMana = 5,
+        playerMaxMana = 5,
+        playerSpellMana = 0,
+        playerHasAttackToken = true,
+        phase = CombatPhase.MAIN_ACTION_PHASE,
+        priorityHolder = com.example.engine.PriorityHolder.PLAYER,
+        playerHand = listOf(harshWinds, ignition),
+        enemyBoard = listOf(e1, e2, e3)
+      )
+    )
+
+    composeTestRule.setContent {
+      PathOfChampionsTheme {
+        Box(modifier = Modifier.size(width = 850.dp, height = 390.dp)) {
+          com.example.ui.screens.CombatScreen(
+            combat = combatState.value,
+            revivesRemaining = 1,
+            onPlayCard = { dispatchedCalls.add(it to null) },
+            onPlayTargetedCard = { id, target -> dispatchedCalls.add(id to target) },
+            onEnterAttack = {},
+            onCancelAttack = {},
+            onToggleAttacker = {},
+            onCommitAttack = {},
+            onSelectEnemyAttackerForBlock = {},
+            onAssignBlocker = { _, _ -> },
+            onRemoveBlocker = {},
+            onCommitBlock = {},
+            onResolveStack = {},
+            onPassTurn = {},
+            onVictoryContinue = {},
+            onUseRevive = {},
+            onAcceptDefeat = {},
+            onAbandonRun = {}
+          )
+        }
+      }
+    }
+    composeTestRule.waitForIdle()
+
+    // 1. Expand hand and tap Harsh Winds -> Play
+    composeTestRule.onNodeWithTag("hand_card_card_ignition").performClick()
+    composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithTag("hand_card_card_harsh_winds").performClick()
+    composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithTag("confirm_play_card_button").performClick()
+    composeTestRule.waitForIdle()
+
+    // Must prompt for target 1/2 and NOT dispatch yet
+    composeTestRule.onNodeWithTag("targeting_prompt_banner").assertIsDisplayed()
+    assertTrue(dispatchedCalls.isEmpty())
+
+    // 2. Tap first enemy e1 -> locks target 1, shows badge + "Chỉ Đóng Băng 1", still does NOT dispatch
+    composeTestRule.onNodeWithTag("board_unit_e1").performClick()
+    composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithTag("confirm_single_target_button").assertIsDisplayed()
+    composeTestRule.onNodeWithTag("locked_target_badge_e1", useUnmergedTree = true).assertIsDisplayed()
+    assertTrue(dispatchedCalls.isEmpty())
+
+    // 3. Tap second enemy e3 -> dispatches "e1|e3" and closes targeting banner
+    composeTestRule.onNodeWithTag("board_unit_e3").performClick()
+    composeTestRule.waitForIdle()
+    assertEquals(listOf("hc_hw" to "e1|e3"), dispatchedCalls)
+    assertEquals(0, composeTestRule.onAllNodesWithTag("targeting_prompt_banner").fetchSemanticsNodes().size)
+
+    // 4. Reset dispatched calls and test Burst direct Nexus damage spell (card_ignition)
+    dispatchedCalls.clear()
+    composeTestRule.runOnUiThread {
+      combatState.value = combatState.value.copy(playerHand = listOf(ignition))
+    }
+    composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithTag("hand_card_card_ignition").performClick()
+    composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithTag("hand_card_card_ignition").performClick()
+    composeTestRule.waitForIdle()
+    composeTestRule.onNodeWithTag("confirm_play_card_button").performClick()
+    composeTestRule.waitForIdle()
+
+    // Must immediately dispatch to ENEMY_NEXUS without opening targeting prompt
+    assertEquals(listOf("hc_ign" to "ENEMY_NEXUS"), dispatchedCalls)
+    assertEquals(0, composeTestRule.onAllNodesWithTag("targeting_prompt_banner").fetchSemanticsNodes().size)
+  }
+
+  @Test
+  fun `positiveKeywordsAndGlossaryRenderCustomLorKeywordIcons`() {
+    val positive21 = listOf(
+      com.example.model.Keyword.AUGMENT,
+      com.example.model.Keyword.BARRIER,
+      com.example.model.Keyword.BRASH,
+      com.example.model.Keyword.CHALLENGER,
+      com.example.model.Keyword.DEEP,
+      com.example.model.Keyword.DOUBLE_ATTACK,
+      com.example.model.Keyword.ELUSIVE,
+      com.example.model.Keyword.EVOLVE,
+      com.example.model.Keyword.FATED,
+      com.example.model.Keyword.FEARSOME,
+      com.example.model.Keyword.FORMIDABLE,
+      com.example.model.Keyword.FURY,
+      com.example.model.Keyword.IMPACT,
+      com.example.model.Keyword.LIFESTEAL,
+      com.example.model.Keyword.LURK,
+      com.example.model.Keyword.OVERWHELM,
+      com.example.model.Keyword.QUICK_ATTACK,
+      com.example.model.Keyword.REGENERATION,
+      com.example.model.Keyword.SCOUT,
+      com.example.model.Keyword.SPELLSHIELD,
+      com.example.model.Keyword.TOUGH
+    )
+    // Every keyword maps to a distinct drawable resource ID
+    val allIconIds = com.example.model.Keyword.entries.map { com.example.ui.components.keywordIconRes(it) }
+    assertEquals(com.example.model.Keyword.entries.size, allIconIds.toSet().size)
+    positive21.forEach { kw ->
+      assertTrue("Missing drawable for $kw", com.example.ui.components.keywordIconRes(kw) != 0)
+    }
+    assertEquals("Huyền Ảo", com.example.model.Keyword.ELUSIVE.displayName)
+    assertEquals("Khí Lực", com.example.model.Keyword.IMPACT.displayName)
+    assertFalse(com.example.model.Keyword.entries.any { it.name == "HALLOWED" })
+
+    val cithria = CardCatalog.getCard("card_cithria")
+    val sampleUnit = UnitOnBoard(
+      instanceId = "u_kw_test",
+      template = cithria,
+      ownerIsPlayer = true,
+      power = 4,
+      health = 5,
+      maxHealth = 5,
+      keywords = setOf(
+        com.example.model.Keyword.FURY,
+        com.example.model.Keyword.LIFESTEAL,
+        com.example.model.Keyword.CHALLENGER
+      )
+    )
+    assertEquals(
+      listOf(
+        com.example.model.Keyword.FURY,
+        com.example.model.Keyword.LIFESTEAL,
+        com.example.model.Keyword.CHALLENGER
+      ),
+      com.example.ui.components.resolveUnitDisplayKeywords(sampleUnit)
+    )
+
+    composeTestRule.setContent {
+      PathOfChampionsTheme {
+        androidx.compose.foundation.layout.Column {
+          com.example.ui.components.UnitToken(
+            unit = sampleUnit,
+            onClick = {}
+          )
+          com.example.ui.components.KeywordGlossaryDialog(onDismiss = {})
+        }
+      }
+    }
+    composeTestRule.waitForIdle()
+    assertTrue(composeTestRule.onAllNodes(androidx.compose.ui.test.hasContentDescription(com.example.model.Keyword.FURY.displayName), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+    assertTrue(composeTestRule.onAllNodes(androidx.compose.ui.test.hasContentDescription(com.example.model.Keyword.LIFESTEAL.displayName), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+    assertTrue(composeTestRule.onAllNodes(androidx.compose.ui.test.hasContentDescription(com.example.model.Keyword.CHALLENGER.displayName), useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty())
+  }
 }
+
+

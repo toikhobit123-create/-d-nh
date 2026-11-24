@@ -1,6 +1,7 @@
 package com.example.engine
 
 import com.example.model.AdventureConfig
+import com.example.model.CardEffectType
 import com.example.model.CardTemplate
 import com.example.model.CardType
 import com.example.model.GlobalMutator
@@ -94,9 +95,6 @@ data class CombatState(
     val selectedAttackerForChallenger: String? = null,
     val selectedEnemyAttackerForBlock: String? = null,
 
-    val playerHallowedStacks: Int = 0,
-    val enemyHallowedStacks: Int = 0,
-    val roundHallowedBuffs: Map<String, Int> = emptyMap(),
     val playerLurkTriggeredThisRound: Boolean = false,
     val enemyLurkTriggeredThisRound: Boolean = false,
     val playerLurkBonus: Int = 0,
@@ -122,6 +120,21 @@ data class CombatState(
     val playerNexusStrikesCount: Int = 0,
     val enemyNexusStrikesCount: Int = 0,
     val playerReputationStrikes: Int = 0,
+
+    val enemyMistStatBonus: Int = 0,
+    val enemyViegoStatBonus: Int = 0,
+    val playerMistStatBonus: Int = 0,
+    val playerViegoStatBonus: Int = 0,
+    val enemyAllyDiedThisRound: Boolean = false,
+    val playerAllyDiedThisRound: Boolean = false,
+    val enemyOtherAllyDiedForViegoThisRound: Boolean = false,
+    val playerOtherAllyDiedForViegoThisRound: Boolean = false,
+    val playerFollowersDiedThisRound: List<UnitOnBoard> = emptyList(),
+    val playerStrongestFollowerDiedLastRound: UnitOnBoard? = null,
+    val roundTempPowerBuffs: Map<String, Int> = emptyMap(),
+    val roundTempHealthBuffs: Map<String, Int> = emptyMap(),
+    val roundTempKeywords: Map<String, Set<Keyword>> = emptyMap(),
+    val tempPossessedReturns: Map<String, Boolean> = emptyMap(),
 
     val playerWon: Boolean? = null,
     val combatLog: List<String> = emptyList()
@@ -203,6 +216,14 @@ data class CombatState(
             canPlay -> null
             priorityHolder != PriorityHolder.PLAYER -> "Chờ lượt của đối thủ"
             isUnitLike && playerBoard.size >= 6 -> "Hàng chờ đã đầy (6/6)"
+            card.template.requiresAllySacrificeOnPlay && playerBoard.none { it.template.type != CardType.LANDMARK } ->
+                "Cần hy sinh 1 đồng minh trên bàn"
+            card.template.effectType == CardEffectType.SACRIFICE_DAMAGE &&
+                (playerBoard.none { it.template.type != CardType.LANDMARK } || enemyBoard.none { it.template.type != CardType.LANDMARK }) ->
+                "Cần ít nhất 1 đồng minh và 1 kẻ địch"
+            card.template.effectType == CardEffectType.POSSESS_UNIT &&
+                (enemyBoard.none { it.template.type != CardType.LANDMARK } || playerBoard.size >= 6) ->
+                if (playerBoard.size >= 6) "Hàng chờ đã đầy (6/6)" else "Không có kẻ địch để Chiếm Hữu"
             card.template.type == CardType.EQUIPMENT && playerBoard.isEmpty() -> "Cần có đồng minh trên bàn"
             card.template.spellSpeed == SpellSpeed.FAST && isInCombat && playerFastSpellUsedInCombat ->
                 "Mỗi đợt giao tranh chỉ dùng 1 Phép Nhanh"

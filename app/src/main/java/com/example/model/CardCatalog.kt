@@ -84,7 +84,7 @@ object CardCatalog {
             name = "Áo Choàng Bóng Tối",
             rarity = Rarity.RARE,
             category = ItemCategory.STAT_KEYWORD,
-            description = "Lẩn Khuất",
+            description = "Huyền Ảo",
             grantedKeyword = Keyword.ELUSIVE
         ),
         ItemTemplate(
@@ -314,12 +314,12 @@ object CardCatalog {
         CardTemplate(
             id = "card_boomcrew_rookie", name = "Tân Binh Đội Bom", region = Region.PILTOVER_ZAUN, type = CardType.UNIT,
             cost = 2, basePower = 1, baseHealth = 3, keywords = setOf(Keyword.IMPACT), impactStacks = 1,
-            description = "Tác Động 1. Tấn Công: Gây 1 sát thương lên Nhà Chính địch."
+            description = "Khí Lực 1. Tấn Công: Gây 1 sát thương lên Nhà Chính địch."
         ),
         CardTemplate(
             id = "card_sumpworks_mapper", name = "Poro Liều Lĩnh", region = Region.PILTOVER_ZAUN, type = CardType.UNIT,
             cost = 1, basePower = 1, baseHealth = 1, keywords = setOf(Keyword.ELUSIVE),
-            description = "Lẩn Khuất."
+            description = "Huyền Ảo."
         ),
         CardTemplate(
             id = "card_ballistic_bot", name = "Người Máy Đạn Đạo", region = Region.PILTOVER_ZAUN, type = CardType.UNIT,
@@ -359,12 +359,12 @@ object CardCatalog {
         CardTemplate(
             id = "card_kinkou_student", name = "Kinkou Sinh Mệnh Kiếm", region = Region.IONIA, type = CardType.UNIT,
             cost = 4, basePower = 2, baseHealth = 3, keywords = setOf(Keyword.ELUSIVE, Keyword.LIFESTEAL),
-            description = "Lẩn Khuất, Hút Máu."
+            description = "Huyền Ảo, Hút Máu."
         ),
         CardTemplate(
             id = "card_shadow_assassin", name = "Sát Thủ Bóng Đêm", region = Region.IONIA, type = CardType.UNIT,
             cost = 3, basePower = 2, baseHealth = 2, keywords = setOf(Keyword.ELUSIVE),
-            description = "Lẩn Khuất. Xuất Trận: Rút 1 lá."
+            description = "Huyền Ảo. Xuất Trận: Rút 1 lá."
         ),
         CardTemplate(
             id = "card_solari_soldier", name = "Khiên Binh Solari", region = Region.TARGON, type = CardType.UNIT,
@@ -383,8 +383,8 @@ object CardCatalog {
         ),
         CardTemplate(
             id = "card_spectral_ironhound", name = "Bóng Ma Tinh Nghịch", region = Region.SHADOW_ISLES, type = CardType.UNIT,
-            cost = 3, basePower = 2, baseHealth = 3, keywords = setOf(Keyword.HALLOWED, Keyword.FEARSOME),
-            description = "Thiêng Liêng, Đáng Sợ. Khi hy sinh, cường hóa đòn tấn công Thiêng Liêng."
+            cost = 3, basePower = 2, baseHealth = 3, keywords = setOf(Keyword.FEARSOME),
+            description = "Đe Dọa."
         ),
         CardTemplate(
             id = "card_rekindled_knight", name = "Hiệp Sĩ Bất Diệt", region = Region.SHADOW_ISLES, type = CardType.UNIT,
@@ -658,6 +658,124 @@ object CardCatalog {
             description = "Kỹ Năng Nguyên Tố. Gây sát thương lên tất cả kẻ địch và Nhà Chính địch.",
             effectType = CardEffectType.GLACIAL_STORM_SKILL, effectValue = 1,
             isCollectibleReward = false
+        ),
+        // --- QUẦN ĐẢO BÓNG ĐÊM (MAP 5★ FIORA & VIEGO) ---
+        CardTemplate(
+            id = "card_fiora", name = "Fiora", region = Region.DEMACIA, type = CardType.CHAMPION,
+            cost = 3, basePower = 9, baseHealth = 9,
+            keywords = setOf(Keyword.CHALLENGER),
+            description = "Thách Đấu. Tướng khởi đầu của Trùm Phụ Fiora.",
+            isChampion = true,
+            levelUpRequirementText = "Hạ gục kẻ địch trong giao tranh.",
+            levelUpPowerBonus = 1, levelUpHealthBonus = 1,
+            isCollectibleReward = false, rarity = Rarity.EPIC
+        ),
+        CardTemplate(
+            id = "card_laurent_bladekeeper", name = "Người Giữ Gươm Laurent", region = Region.DEMACIA, type = CardType.UNIT,
+            cost = 4, basePower = 5, baseHealth = 4, keywords = emptySet(),
+            description = "Xuất Trận: Ban +2|+2 cho 1 đồng minh.",
+            isCollectibleReward = false, rarity = Rarity.RARE
+        ),
+        CardTemplate(
+            id = "card_badgerbear", name = "Gấu", region = Region.DEMACIA, type = CardType.UNIT,
+            cost = 3, basePower = 4, baseHealth = 6, keywords = emptySet(),
+            description = "Mãnh thú rừng sâu Demacia.",
+            isCollectibleReward = false, rarity = Rarity.COMMON
+        ),
+        CardTemplate(
+            id = "card_tiana_crownguard", name = "Tiana", region = Region.DEMACIA, type = CardType.UNIT,
+            cost = 8, basePower = 8, baseHealth = 8, keywords = setOf(Keyword.TOUGH),
+            description = "Kiên Cường. Khi triệu hồi: Ban Kiên Cường cho cả đội.",
+            isCollectibleReward = false, rarity = Rarity.EPIC
+        ),
+        CardTemplate(
+            id = "card_tough_poro", name = "Poro", region = Region.DEMACIA, type = CardType.UNIT,
+            cost = 1, basePower = 1, baseHealth = 1, keywords = setOf(Keyword.TOUGH),
+            description = "Kiên Cường.",
+            isCollectibleReward = false, rarity = Rarity.COMMON
+        ),
+        CardTemplate(
+            id = "card_dawnspeakers", name = "Speaker", region = Region.DEMACIA, type = CardType.UNIT,
+            cost = 3, basePower = 1, baseHealth = 4, keywords = emptySet(),
+            description = "Kết Thúc Vòng Đấu: Nếu có đồng minh hy sinh trong vòng, ban +1|+1 cho đồng minh mạnh nhất.",
+            isCollectibleReward = false, rarity = Rarity.EPIC
+        ),
+        CardTemplate(
+            id = "card_fleetfeather_tracker", name = "Đại Bàng Trinh Sát", region = Region.DEMACIA, type = CardType.UNIT,
+            cost = 1, basePower = 2, baseHealth = 1, keywords = emptySet(),
+            description = "Khi đồng minh được triệu hồi, trao cho ta Thách Đấu nếu ta đang ở trên sân.",
+            isCollectibleReward = false, rarity = Rarity.COMMON
+        ),
+        CardTemplate(
+            id = "card_viego", name = "Viego", region = Region.SHADOW_ISLES, type = CardType.CHAMPION,
+            cost = 6, basePower = 6, baseHealth = 5,
+            keywords = setOf(Keyword.FEARSOME),
+            description = "Đáng Sợ. Mỗi vòng, lần đầu đồng minh khác hy sinh, triệu hồi 1 Màn Sương Xâm Chiếm. Lv2 Đầu Vòng: Chiếm vĩnh viễn kẻ địch mạnh nhất (hoặc tiêu diệt nếu là Anh Hùng).",
+            isChampion = true,
+            levelUpRequirementText = "Ta đã thấy các đồng minh hy sinh có tổng cộng 20+ Sức Mạnh.",
+            levelUpPowerBonus = 1, levelUpHealthBonus = 1,
+            isCollectibleReward = false, rarity = Rarity.EPIC
+        ),
+        CardTemplate(
+            id = "card_encroaching_mist", name = "Màn Sương Xâm Chiếm", region = Region.SHADOW_ISLES, type = CardType.UNIT,
+            cost = 1, basePower = 1, baseHealth = 1,
+            keywords = setOf(Keyword.EPHEMERAL),
+            description = "Cảm Tử. Khi được triệu hồi: Ban +1|+1 cho Viego và mọi Màn Sương Xâm Chiếm ở mọi nơi.",
+            isCollectibleReward = false, rarity = Rarity.COMMON
+        ),
+        CardTemplate(
+            id = "card_spiderling", name = "Nhện", region = Region.SHADOW_ISLES, type = CardType.UNIT,
+            cost = 1, basePower = 1, baseHealth = 1, keywords = emptySet(),
+            description = "Nhện con Quần Đảo Bóng Đêm.",
+            isCollectibleReward = false, rarity = Rarity.COMMON
+        ),
+        CardTemplate(
+            id = "card_hapless_aristocrat", name = "Quý Tộc", region = Region.SHADOW_ISLES, type = CardType.UNIT,
+            cost = 1, basePower = 2, baseHealth = 1, keywords = emptySet(),
+            description = "Khi chết: Triệu hồi 1 Nhện (1/1).",
+            isCollectibleReward = false, rarity = Rarity.COMMON
+        ),
+        CardTemplate(
+            id = "card_fading_icon", name = "Biểu Tượng Phai Nhạt", region = Region.SHADOW_ISLES, type = CardType.UNIT,
+            cost = 2, basePower = 3, baseHealth = 1, keywords = emptySet(),
+            description = "Khi được triệu hồi: Triệu hồi 1 Nhện (1/1).",
+            isCollectibleReward = false, rarity = Rarity.COMMON
+        ),
+        CardTemplate(
+            id = "card_camavoran_soldier", name = "Chiến Binh Camavor", region = Region.SHADOW_ISLES, type = CardType.UNIT,
+            cost = 3, basePower = 4, baseHealth = 4, keywords = emptySet(),
+            description = "Khi ra sân: Triệu hồi 1 Màn Sương Xâm Chiếm.",
+            isCollectibleReward = false, rarity = Rarity.COMMON
+        ),
+        CardTemplate(
+            id = "card_black_spear_custom", name = "Bàn Tay Chết Chóc", region = Region.SHADOW_ISLES, type = CardType.SPELL,
+            cost = 3, spellSpeed = SpellSpeed.FAST,
+            description = "Chọn 1 đồng minh để hy sinh, sau đó chọn 1 kẻ địch để gây 5 sát thương.",
+            effectType = CardEffectType.SACRIFICE_DAMAGE, effectValue = 5,
+            isCollectibleReward = false, rarity = Rarity.RARE
+        ),
+        CardTemplate(
+            id = "card_camavoran_dragon", name = "Rồng Camavor", region = Region.SHADOW_ISLES, type = CardType.UNIT,
+            cost = 4, basePower = 4, baseHealth = 4,
+            keywords = setOf(Keyword.OVERWHELM, Keyword.FEARSOME),
+            description = "Rồng, Áp Đảo, Đáng Sợ. Phải hy sinh 1 đồng minh để ra sân. Khi tiêu diệt kẻ địch, hút 1 máu từ Nhà Chính đối phương.",
+            requiresAllySacrificeOnPlay = true,
+            isDragon = true,
+            isCollectibleReward = false, rarity = Rarity.RARE
+        ),
+        CardTemplate(
+            id = "card_possession", name = "Chiếm Hữu", region = Region.SHADOW_ISLES, type = CardType.SPELL,
+            cost = 5, spellSpeed = SpellSpeed.SLOW,
+            description = "Cướp 1 bài quân của đối phương trong vòng này.",
+            effectType = CardEffectType.POSSESS_UNIT, effectValue = 0,
+            isCollectibleReward = false, rarity = Rarity.RARE
+        ),
+        CardTemplate(
+            id = "card_invasive_hydravine", name = "Quái Cây", region = Region.SHADOW_ISLES, type = CardType.UNIT,
+            cost = 7, basePower = 9, baseHealth = 8,
+            keywords = setOf(Keyword.FEARSOME),
+            description = "Đáng Sợ. Khi ra sân hoặc Bắt Đầu Vòng Đấu, triệu hồi 1 Màn Sương Xâm Chiếm.",
+            isCollectibleReward = false, rarity = Rarity.EPIC
         )
     ).associateBy { it.id }
 
@@ -758,7 +876,7 @@ object CardCatalog {
     val reinforcementPackages = listOf(
         ReinforcementPackage(
             "reinf_zed", "card_zed", "Zed — Chớp Nhoáng Bóng Đêm",
-            "Tấn Công Nhanh & Phân thân Lẩn Khuất",
+            "Tấn Công Nhanh & Phân thân Huyền Ảo",
             listOf("card_zed", "card_shadow_assassin", "card_spectral_ironhound")
         ),
         ReinforcementPackage(

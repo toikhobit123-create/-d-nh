@@ -26,7 +26,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Bolt
@@ -379,7 +381,7 @@ fun HandCardInspectOverlay(
         Surface(
             modifier = Modifier
                 .align(Alignment.Center)
-                .offset(y = offsetY)
+                .padding(vertical = 8.dp)
                 .widthIn(min = minWidth, max = maxWidth)
                 .pointerInput(Unit) { detectTapGestures {} },
             shape = RoundedCornerShape(GameRadius.panel),
@@ -398,21 +400,28 @@ fun HandCardInspectOverlay(
                 modifier = Modifier.padding(GameSpacing.md),
                 verticalArrangement = Arrangement.spacedBy(GameSpacing.sm)
             ) {
-                CardTile(
-                    template = card.template,
-                    effectiveCost = effectiveCost,
-                    bonusPower = card.bonusPower,
-                    bonusHealth = card.bonusHealth,
-                    attachedItems = card.attachedItems,
-                    extraKeywords = card.extraKeywords,
-                    isFleeting = card.isFleeting,
-                    playable = resolvedCanPlay
-                )
-                if (manaPreview != null) {
-                    ManaPaymentBreakdownBox(
-                        preview = manaPreview,
-                        descFontSize = descFontSize
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(GameSpacing.sm)
+                ) {
+                    CardTile(
+                        template = card.template,
+                        effectiveCost = effectiveCost,
+                        bonusPower = card.bonusPower,
+                        bonusHealth = card.bonusHealth,
+                        attachedItems = card.attachedItems,
+                        extraKeywords = card.extraKeywords,
+                        isFleeting = card.isFleeting,
+                        playable = resolvedCanPlay
                     )
+                    if (manaPreview != null) {
+                        ManaPaymentBreakdownBox(
+                            preview = manaPreview,
+                            descFontSize = descFontSize
+                        )
+                    }
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -515,19 +524,33 @@ fun UnitInspectOverlay(
                         color = AccentGold
                     )
                 }
-                if (unit.isStunned || unit.isFrostbitten || unit.hasBarrier || unit.hasSpellShield) {
-                    val statuses = buildList {
-                        if (unit.hasBarrier) add("Lá chắn")
-                        if (unit.hasSpellShield) add("Khiên phép")
-                        if (unit.isFrostbitten) add("Đóng băng")
-                        if (unit.isStunned) add("Choáng")
+                val statusKeywords = buildList {
+                    if (unit.hasBarrier) add(com.example.model.Keyword.BARRIER)
+                    if (unit.hasSpellShield) add(com.example.model.Keyword.SPELLSHIELD)
+                    if (unit.isFrostbitten) add(com.example.model.Keyword.FROSTBITE)
+                    if (unit.isStunned) add(com.example.model.Keyword.STUN)
+                    if (unit.isSilenced) add(com.example.model.Keyword.SILENCE)
+                    if (unit.isShackled) add(com.example.model.Keyword.SHACKLED)
+                }
+                if (statusKeywords.isNotEmpty()) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs)
+                    ) {
+                        statusKeywords.forEach { kw ->
+                            com.example.ui.components.KeywordIcon(
+                                keyword = kw,
+                                size = 14.dp,
+                                contentDescription = null
+                            )
+                        }
+                        Text(
+                            text = "Trạng thái: ${statusKeywords.joinToString { it.displayName }}",
+                            fontFamily = PlusJakartaSansFamily,
+                            fontSize = descFontSize,
+                            color = AccentIce
+                        )
                     }
-                    Text(
-                        text = "Trạng thái: ${statuses.joinToString()}",
-                        fontFamily = PlusJakartaSansFamily,
-                        fontSize = descFontSize,
-                        color = AccentIce
-                    )
                 }
                 TextButton(
                     onClick = onDismiss,

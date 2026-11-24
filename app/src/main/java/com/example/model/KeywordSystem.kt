@@ -124,13 +124,13 @@ enum class Keyword(
     ),
     ELUSIVE(
         "Elusive",
-        "Bóng Ma", KeywordCategory.COMBAT_POSITIVE, true, false,
-        "Chỉ có thể bị chặn bởi một đơn vị có Bóng Ma."
+        "Huyền Ảo", KeywordCategory.COMBAT_POSITIVE, true, false,
+        "Chỉ có thể bị chặn bởi một đơn vị có Huyền Ảo."
     ),
     SHARPSIGHT(
         "Sharpsight",
         "Tinh Mắt", KeywordCategory.COMBAT_POSITIVE, true, false,
-        "Có thể chặn các đơn vị Bóng Ma."
+        "Có thể chặn các đơn vị Huyền Ảo."
     ),
     FEARSOME(
         "Fearsome",
@@ -149,7 +149,7 @@ enum class Keyword(
     ),
     IMPACT(
         "Impact",
-        "Xung Kích", KeywordCategory.COMBAT_POSITIVE, true, true,
+        "Khí Lực", KeywordCategory.COMBAT_POSITIVE, true, true,
         "Khi đơn vị này ra đòn trong lúc tấn công, nó gây 1 sát thương lên Nhà Chính của đối phương. Từ khóa này có thể cộng dồn."
     ),
     LIFESTEAL(
@@ -211,11 +211,6 @@ enum class Keyword(
         "Formidable",
         "Kiên Định", KeywordCategory.COMBAT_POSITIVE, true, false,
         "Ta ra đòn bằng Máu thay vì Sức Mạnh của mình."
-    ),
-    HALLOWED(
-        "Hallowed",
-        "Thánh Hóa", KeywordCategory.COMBAT_POSITIVE, true, false,
-        "Sau khi ta bị hạ gục, trong phần còn lại của trận đấu khi đồng minh tấn công, thánh hóa kẻ tấn công đầu tiên của bạn để ban cho nó +1|+0 trong vòng đấu đó."
     ),
     SPIRIT(
         "Spirit",

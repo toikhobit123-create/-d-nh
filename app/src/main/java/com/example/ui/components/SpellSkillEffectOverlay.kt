@@ -69,6 +69,7 @@ data class SpellSkillVfxEvent(
     val card: CardTemplate,
     val sourceIsPlayer: Boolean,
     val targetCenterNorm: Offset? = null,
+    val extraTargetNorms: List<Offset> = emptyList(),
     val isSkill: Boolean = card.spellSpeed == SpellSpeed.SKILL
 )
 
@@ -202,6 +203,12 @@ private fun SpellSkillVfxLayer(
                     y = (norm.y * size.height).coerceIn(size.height * 0.12f, size.height * 0.88f)
                 )
             } ?: defaultTarget
+            val allTargets = listOf(targetPt) + event.extraTargetNorms.map { norm ->
+                Offset(
+                    x = (norm.x * size.width).coerceIn(size.width * 0.12f, size.width * 0.88f),
+                    y = (norm.y * size.height).coerceIn(size.height * 0.12f, size.height * 0.88f)
+                )
+            }
 
             val originPt = if (event.card.spellSpeed == SpellSpeed.FAST ||
                 event.card.spellSpeed == SpellSpeed.SLOW ||
@@ -223,38 +230,48 @@ private fun SpellSkillVfxLayer(
                     targetEnemyHalf = event.sourceIsPlayer,
                     fullBoard = event.card.id == "card_wings_of_cryophoenix" || event.card.id == "card_crystal_stormbird"
                 )
-                SpellVisualStyle.FROST_TARGET -> drawFrostTargetVfx(
-                    p = p,
-                    alpha = fadeAlpha,
-                    target = targetPt,
-                    accent = accent
-                )
-                SpellVisualStyle.ARCANE_PROJECTILE -> drawArcaneProjectileVfx(
-                    p = p,
-                    alpha = fadeAlpha,
-                    origin = originPt,
-                    target = targetPt,
-                    accent = accent
-                )
-                SpellVisualStyle.TEMPEST_LIGHTNING -> drawTempestVfx(
-                    p = p,
-                    alpha = fadeAlpha,
-                    target = targetPt,
-                    accent = accent
-                )
-                SpellVisualStyle.SHIELD_GOLDEN_BUFF -> drawGoldenShieldVfx(
-                    p = p,
-                    alpha = fadeAlpha,
-                    target = targetPt,
-                    accent = accent,
-                    isClash = event.card.effectType == CardEffectType.SINGLE_COMBAT_STRIKE
-                )
-                SpellVisualStyle.SEISMIC_COSMIC -> drawSeismicCosmicVfx(
-                    p = p,
-                    alpha = fadeAlpha,
-                    target = targetPt,
-                    accent = accent
-                )
+                SpellVisualStyle.FROST_TARGET -> allTargets.forEach { t ->
+                    drawFrostTargetVfx(
+                        p = p,
+                        alpha = fadeAlpha,
+                        target = t,
+                        accent = accent
+                    )
+                }
+                SpellVisualStyle.ARCANE_PROJECTILE -> allTargets.forEach { t ->
+                    drawArcaneProjectileVfx(
+                        p = p,
+                        alpha = fadeAlpha,
+                        origin = originPt,
+                        target = t,
+                        accent = accent
+                    )
+                }
+                SpellVisualStyle.TEMPEST_LIGHTNING -> allTargets.forEach { t ->
+                    drawTempestVfx(
+                        p = p,
+                        alpha = fadeAlpha,
+                        target = t,
+                        accent = accent
+                    )
+                }
+                SpellVisualStyle.SHIELD_GOLDEN_BUFF -> allTargets.forEach { t ->
+                    drawGoldenShieldVfx(
+                        p = p,
+                        alpha = fadeAlpha,
+                        target = t,
+                        accent = accent,
+                        isClash = event.card.effectType == CardEffectType.SINGLE_COMBAT_STRIKE
+                    )
+                }
+                SpellVisualStyle.SEISMIC_COSMIC -> allTargets.forEach { t ->
+                    drawSeismicCosmicVfx(
+                        p = p,
+                        alpha = fadeAlpha,
+                        target = t,
+                        accent = accent
+                    )
+                }
             }
         }
 

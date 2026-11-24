@@ -1529,47 +1529,6 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun `hallowed attack buff lasts only for current round and resets at round transition`() {
-        val adv = AdventureCatalog.getAdventure("adv_demacia_outskirts")
-        val node = adv.mapNodes.first { it.id == "d_fight_1a" }
-
-        val ally = UnitOnBoard(
-            instanceId = "p_hallow_atk",
-            template = CardCatalog.getCard("card_cithria"),
-            ownerIsPlayer = true,
-            power = 2,
-            health = 2,
-            maxHealth = 2,
-            keywords = emptySet()
-        )
-        var state = CombatState(
-            encounterNode = node,
-            adventure = adv,
-            championId = "champ_garen",
-            starLevel = 1,
-            equippedRelics = emptyList(),
-            activePowers = emptyList(),
-            mutators = emptyList(),
-            round = 1,
-            playerNexusHp = 30,
-            playerMaxHp = 30,
-            enemyNexusHp = 20,
-            enemyMaxHp = 20,
-            playerHallowedStacks = 3,
-            playerBoard = listOf(ally),
-            attackingUnitIds = listOf("p_hallow_atk"),
-            phase = CombatPhase.COMBAT_DECLARE_ATTACK_PHASE
-        )
-
-        state = CombatEngine.commitPlayerAttack(state)
-        assertEquals(5, state.playerBoard.single { it.instanceId == "p_hallow_atk" }.power)
-
-        state = CombatEngine.advanceToNextRound(state, mutableListOf())
-        assertEquals(2, state.round)
-        assertEquals(2, state.playerBoard.single { it.instanceId == "p_hallow_atk" }.power)
-    }
-
-    @Test
     fun `enemy lifesteal heals enemy nexus and ashe frostbite aura does not buff frostbitten allies`() {
         val adv = AdventureCatalog.getAdventure("adv_demacia_outskirts")
         val node = adv.mapNodes.first { it.id == "d_fight_1a" }
@@ -3014,7 +2973,6 @@ class ExampleUnitTest {
         assertEquals(1, revived.health)
         assertTrue(revived.isStunned)
         assertFalse(revived.hasDeathless)
-        assertEquals(1, afterDeathlessCombat.enemyHallowedStacks + if (deathlessBlk.keywords.contains(Keyword.HALLOWED)) 0 else 1) // Verify next Fury check
         assertEquals(4, afterDeathlessCombat.playerBoard.single().power) // Fury triggered on Deathless death!
 
         // Silence removes keywords, buffs, Frostbite, Stun, Gloom, caps HP to base MaxHealth while preserving damage, and releases Captured units
@@ -3050,31 +3008,31 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun `part 2 3 ephemeral augment deep evolve fated lurk spirit gloom hallowed support scout work`() {
+    fun `part 2 3 ephemeral augment deep evolve fated lurk spirit gloom support scout work`() {
         // 1. Ephemeral + Quick Attack: kills blocker cleanly without dying in strike, THEN self-destructs immediately after striking;
-        // a second non-striking Ephemeral ally on bench survives combat and dies at Round End triggering Hallowed
-        val ephQaHallowed = UnitOnBoard(
+        // a second non-striking Ephemeral ally on bench survives combat and dies at Round End
+        val ephQa = UnitOnBoard(
             "p_eqh",
             CardCatalog.getCard("card_cithria"),
             ownerIsPlayer = true,
             power = 4,
             health = 2,
             maxHealth = 2,
-            keywords = setOf(Keyword.EPHEMERAL, Keyword.QUICK_ATTACK, Keyword.HALLOWED)
+            keywords = setOf(Keyword.EPHEMERAL, Keyword.QUICK_ATTACK)
         )
-        val ephBenchHallowed = UnitOnBoard(
+        val ephBench = UnitOnBoard(
             "p_ebh",
             CardCatalog.getCard("card_cithria"),
             ownerIsPlayer = true,
             power = 2,
             health = 2,
             maxHealth = 2,
-            keywords = setOf(Keyword.EPHEMERAL, Keyword.HALLOWED)
+            keywords = setOf(Keyword.EPHEMERAL)
         )
         val weakBlk = UnitOnBoard("e_w", CardCatalog.getCard("card_cithria"), ownerIsPlayer = false, power = 3, health = 2, maxHealth = 2, keywords = emptySet())
         var ephState = CombatEngine.resolveCombatResolution(
             testBaseState(
-                playerBoard = listOf(ephQaHallowed, ephBenchHallowed),
+                playerBoard = listOf(ephQa, ephBench),
                 enemyBoard = listOf(weakBlk),
                 attackingUnitIds = listOf("p_eqh"),
                 blockPairings = mapOf("p_eqh" to "e_w")
@@ -3084,10 +3042,8 @@ class ExampleUnitTest {
         )
         // Striker died immediately after striking via Ephemeral; bench Ephemeral survived combat
         assertEquals(listOf("p_ebh"), ephState.playerBoard.map { it.instanceId })
-        assertEquals(1, ephState.playerHallowedStacks)
         ephState = CombatEngine.advanceToNextRound(ephState, mutableListOf())
         assertTrue(ephState.playerBoard.isEmpty()) // Bench Ephemeral died at Round End
-        assertEquals(2, ephState.playerHallowedStacks) // Hallowed incremented on Round End death!
 
         // 2. Augment only triggers on created cards, Fated triggers once per round on targeted ally (not in hand)
         val augFatedUnit = UnitOnBoard(
@@ -3152,7 +3108,7 @@ class ExampleUnitTest {
         assertEquals(7, afterDeepDraw.power)
         assertEquals(7, afterDeepDraw.health)
 
-        // 4. Lurk (once per round if top card has Lurk) + Hallowed + Support + Scout
+        // 4. Lurk (once per round if top card has Lurk) + Support + Scout
         val lurkScoutCard = CardCatalog.getCard("card_cithria").copy(
             id = "test_lurk_scout",
             name = "Lurk Scout",
@@ -3163,7 +3119,7 @@ class ExampleUnitTest {
         )
         val supporterCard = CardCatalog.getCard("card_cithria").copy(
             id = "test_supporter",
-            name = "Hallowed Supporter",
+            name = "Scout Supporter",
             cost = 2,
             basePower = 2,
             baseHealth = 3,
@@ -3183,13 +3139,11 @@ class ExampleUnitTest {
             phase = CombatPhase.COMBAT_DECLARE_ATTACK_PHASE,
             attackingUnitIds = listOf("p_sup", "p_lrk")
         ).copy(
-            playerHallowedStacks = 2,
             playerDrawPile = listOf(lurkerOnTop)
         )
         comboState = CombatEngine.commitPlayerAttack(comboState)
-        // Hallowed buffed leftmost attacker (p_sup: 2 + 2 = 4); Lurk buffed rightLurker (+1 -> 3) & hand/deck;
-        // Support buffed rightLurker (+2|+1 + Overwhelm -> 5|4)!
-        assertEquals(4, comboState.playerBoard.first { it.instanceId == "p_sup" }.power)
+        // Lurk buffed rightLurker (+1 -> 3) & hand/deck; Support buffed rightLurker (+2|+1 + Overwhelm -> 5|4)!
+        assertEquals(2, comboState.playerBoard.first { it.instanceId == "p_sup" }.power)
         val supportedLurker = comboState.playerBoard.first { it.instanceId == "p_lrk" }
         assertEquals(5, supportedLurker.power)
         assertEquals(4, supportedLurker.health)
@@ -3202,7 +3156,7 @@ class ExampleUnitTest {
 
         // Gloom (-1|-1 kills at 0 HP) & Support temporary buff expires at Round End
         val afterRoundEnd = CombatEngine.advanceToNextRound(comboState, mutableListOf())
-        assertEquals(2, afterRoundEnd.playerBoard.first { it.instanceId == "p_sup" }.power) // Hallowed expired
+        assertEquals(2, afterRoundEnd.playerBoard.first { it.instanceId == "p_sup" }.power)
         val lurkerPostRound = afterRoundEnd.playerBoard.first { it.instanceId == "p_lrk" }
         assertEquals(3, lurkerPostRound.power) // Lurk (+1) kept, Support (+2|+1, Overwhelm) expired!
         assertEquals(3, lurkerPostRound.health)
@@ -3268,11 +3222,10 @@ class ExampleUnitTest {
             enemyBoard = listOf(weakEnemy1, weakEnemy2),
             playerHand = listOf(sc1, sc2),
             playerMana = 10
-        ).copy(playerHallowedStacks = 3, round = 1)
+        ).copy(round = 1)
 
         garenState = CombatEngine.playCardFromHand(garenState, "hc_sc1", targetUnitId = "p_garen|e_1")
         garenState = EnemyAIController.executeTurn(garenState)
-        assertEquals(3, garenState.playerHallowedStacks) // Attack Hallowed NOT consumed by Strike spell
         assertEquals(5, garenState.playerBoard.single().power)
         assertEquals(1, garenState.playerTotalStrikes)
         assertEquals(1, garenState.playerBoard.single().levelProgress)
@@ -3385,17 +3338,17 @@ class ExampleUnitTest {
                 HandCardInstance("hc_rl", rallySpell, effectiveCost = 1)
             ),
             playerMana = 10
-        ).copy(playerHasAttackToken = false, playerHallowedStacks = 2, enemyNexusHp = 20)
+        ).copy(playerHasAttackToken = false, enemyNexusHp = 20)
 
         freeState = CombatEngine.playCardFromHand(freeState, "hc_fa", targetUnitId = "p_free")
         freeState = EnemyAIController.executeTurn(freeState) // AI passes on stack -> Free Attack launches
         assertTrue(freeState.isFreeAttack)
         assertEquals(CombatPhase.COMBAT_DECLARE_BLOCK_PHASE, freeState.phase)
-        assertEquals(5, freeState.playerBoard.single().power) // Hallowed triggered on Free Attack!
+        assertEquals(3, freeState.playerBoard.single().power)
         assertEquals(listOf("p_free"), freeState.attackingUnitIds)
         freeState = EnemyAIController.executeTurn(freeState) // AI commits 0 blockers
         freeState = CombatEngine.commitPlayerBlock(freeState) // Resolve combat
-        assertEquals(15, freeState.enemyNexusHp)
+        assertEquals(17, freeState.enemyNexusHp)
         assertFalse(freeState.playerHasAttackToken) // Attack Token remained false!
         assertFalse(freeState.isFreeAttack)
 
@@ -3458,7 +3411,6 @@ class ExampleUnitTest {
             onLastBreathRally = true
         )
         val unitWithLbAndGear = equipped2.copy(
-            keywords = equipped2.keywords + Keyword.HALLOWED,
             attachedItems = listOf(lbRallyItem)
         )
         val baseLeaveState = testBaseState(
@@ -3469,20 +3421,17 @@ class ExampleUnitTest {
         ).copy(
             confirmedBlockedAttackerIds = setOf("e_atk"),
             blockCommitted = true,
-            playerHasAttackToken = false,
-            playerHallowedStacks = 0
+            playerHasAttackToken = false
         )
 
         val afterRecall = CombatEngine.recallUnit(baseLeaveState, "p_host", isEnemy = false, isSpell = false)
         assertEquals(setOf("card_cithria", "test_gear_2"), afterRecall.playerHand.map { it.template.id }.toSet())
         assertFalse(afterRecall.playerHasAttackToken) // Last Breath did NOT fire on Recall
-        assertEquals(0, afterRecall.playerHallowedStacks)
         assertTrue(afterRecall.confirmedBlockedAttackerIds.contains("e_atk")) // wasBlocked preserved!
 
         val afterObliterate = CombatEngine.obliterateUnit(baseLeaveState, "p_host", isEnemy = false, isSpell = false)
         assertEquals(listOf("test_gear_2"), afterObliterate.playerHand.map { it.template.id })
         assertFalse(afterObliterate.playerHasAttackToken) // Last Breath did NOT fire on Obliterate
-        assertEquals(0, afterObliterate.playerHallowedStacks)
         assertTrue(afterObliterate.confirmedBlockedAttackerIds.contains("e_atk"))
 
         val afterCapture = CombatEngine.captureUnit(baseLeaveState, captorId = "e_cap", captorIsPlayer = false, targetId = "p_host", targetIsEnemy = false, isSpell = false)
@@ -3490,10 +3439,9 @@ class ExampleUnitTest {
         assertFalse(afterCapture.playerHasAttackToken) // Last Breath did NOT fire on Capture
         assertTrue(afterCapture.confirmedBlockedAttackerIds.contains("e_atk"))
 
-        // True death triggers BOTH Last Breath Rally & Hallowed
+        // True death triggers Last Breath Rally
         val afterTrueDeath = CombatEngine.removeUnit(baseLeaveState, "p_host", isEnemy = false, logs = mutableListOf())
         assertTrue(afterTrueDeath.playerHasAttackToken)
-        assertEquals(1, afterTrueDeath.playerHallowedStacks)
 
         // Silence strips gear stats & keywords cleanly
         val afterSilence = CombatEngine.silenceUnit(baseLeaveState, "p_host", isEnemy = false, isSpell = false).playerBoard.single()
@@ -3562,8 +3510,9 @@ class ExampleUnitTest {
         assertEquals("Áp Đảo", Keyword.OVERWHELM.displayName)
         assertEquals("Đóng Băng", Keyword.FROSTBITE.displayName)
         assertEquals("Tấn Công Nhanh", Keyword.QUICK_ATTACK.displayName)
-        assertEquals("Bóng Ma", Keyword.ELUSIVE.displayName)
-        assertEquals("Chỉ có thể bị chặn bởi một đơn vị có Bóng Ma.", Keyword.ELUSIVE.description)
+        assertEquals("Huyền Ảo", Keyword.ELUSIVE.displayName)
+        assertEquals("Chỉ có thể bị chặn bởi một đơn vị có Huyền Ảo.", Keyword.ELUSIVE.description)
+        assertEquals("Khí Lực", Keyword.IMPACT.displayName)
         assertEquals("Chậm", SpellSpeed.SLOW.displayName)
         assertEquals("Nhanh", SpellSpeed.FAST.displayName)
         assertEquals("Siêu Tốc", SpellSpeed.BURST.displayName)
@@ -4123,42 +4072,6 @@ class ExampleUnitTest {
     }
 
     @Test
-    fun `roundHallowedBuffs is immutable in CombatState and resets at round end without cross-state pollution`() {
-        val adv = AdventureCatalog.getAdventure("adv_demacia_outskirts")
-        val node = adv.mapNodes.first { it.id == "d_fight_1a" }
-        val baseUnit = UnitOnBoard("p_1", CardCatalog.getCard("card_cithria"), true, 2, 2, 2, emptySet())
-        val baseState = CombatState(
-            encounterNode = node,
-            adventure = adv,
-            championId = "champ_anivia",
-            starLevel = 1,
-            equippedRelics = emptyList(),
-            activePowers = emptyList(),
-            mutators = emptyList(),
-            round = 1,
-            playerNexusHp = 30,
-            playerMaxHp = 30,
-            enemyNexusHp = 20,
-            enemyMaxHp = 20,
-            playerHallowedStacks = 3,
-            playerBoard = listOf(baseUnit),
-            phase = CombatPhase.COMBAT_DECLARE_ATTACK_PHASE,
-            attackingUnitIds = listOf("p_1")
-        )
-
-        val simBranch = CombatEngine.commitPlayerAttack(baseState)
-        assertEquals(3, simBranch.roundHallowedBuffs["p_1"])
-        assertEquals(5, simBranch.playerBoard.single().power)
-        // Original state remains completely unpolluted
-        assertTrue(baseState.roundHallowedBuffs.isEmpty())
-        assertEquals(2, baseState.playerBoard.single().power)
-
-        val nextRound = CombatEngine.advanceToNextRound(simBranch, mutableListOf())
-        assertTrue(nextRound.roundHallowedBuffs.isEmpty())
-        assertEquals(2, nextRound.playerBoard.single().power)
-    }
-
-    @Test
     fun `enemyAi tracks consecutiveAiActionsInRound in CombatState and enforces canPlayCard fast spell rules`() {
         val adv = AdventureCatalog.getAdventure("adv_demacia_outskirts")
         val node = adv.mapNodes.first { it.id == "d_fight_1a" }
@@ -4260,7 +4173,7 @@ class ExampleUnitTest {
         assertEquals(15, resolved.enemyNexusHp)
         // Blocker death log ("đã bị hạ gục") appears BEFORE Impact Nexus damage log
         val killLogIdx = logs.indexOfFirst { it.contains("đã bị hạ gục") }
-        val impactLogIdx = logs.indexOfFirst { it.contains("Tác Động") }
+        val impactLogIdx = logs.indexOfFirst { it.contains("Khí Lực") }
         assertTrue("Expected kill log before Impact log, logs=$logs", killLogIdx in 0 until impactLogIdx)
     }
 
@@ -4681,4 +4594,506 @@ class ExampleUnitTest {
         assertEquals(manaBefore - expectedSpent, after.playerMana + after.playerSpellMana)
         assertFalse(after.playerHand.any { it.instanceId == cheapCard.instanceId })
     }
+
+    @Test
+    fun `frostbiteTwoAndAniviaSpellFrostbiteExactSelectedTargetsAndSingleTargetChoice`() {
+        val adv = AdventureCatalog.getAdventure("adv_demacia_outskirts")
+        val node = adv.mapNodes.first { it.id == "d_fight_1a" }
+        val harshWinds = HandCardInstance(
+            instanceId = "hc_hw",
+            template = CardCatalog.getCard("card_harsh_winds"),
+            effectiveCost = 5
+        )
+        val aniviaSpell = HandCardInstance(
+            instanceId = "hc_anivia_hw",
+            template = CardCatalog.getCard("card_anivia_harsh_winds"),
+            effectiveCost = 5
+        )
+        val enemy1 = UnitOnBoard("e1", CardCatalog.getCard("card_cithria"), false, 3, 2, 2, emptySet())
+        val enemy2 = UnitOnBoard("e2", CardCatalog.getCard("card_guardian_follower"), false, 5, 5, 5, emptySet())
+        val enemy3 = UnitOnBoard("e3", CardCatalog.getCard("card_laurent_protege"), false, 2, 4, 4, emptySet())
+
+        val baseState = CombatState(
+            encounterNode = node,
+            adventure = adv,
+            championId = "champ_lux",
+            starLevel = 1,
+            equippedRelics = emptyList(),
+            activePowers = emptyList(),
+            mutators = emptyList(),
+            playerNexusHp = 30,
+            playerMaxHp = 30,
+            enemyNexusHp = 20,
+            enemyMaxHp = 20,
+            playerMana = 10,
+            playerMaxMana = 10,
+            playerHand = listOf(harshWinds, aniviaSpell),
+            playerDrawPile = listOf(HandCardInstance("d_1", CardCatalog.getCard("card_cithria"), effectiveCost = 1)),
+            enemyBoard = listOf(enemy1, enemy2, enemy3),
+            phase = CombatPhase.MAIN_ACTION_PHASE,
+            priorityHolder = PriorityHolder.PLAYER
+        )
+
+        assertEquals(2, CombatEngine.requiredPlayerTargetCount(harshWinds.template))
+        assertEquals(2, CombatEngine.requiredPlayerTargetCount(aniviaSpell.template))
+
+        // Selecting e1|e3 must frostbite ONLY e1 and e3, leaving strongest e2 untouched
+        val afterTwo = CombatEngine.playCardFromHand(baseState, "hc_hw", targetUnitId = "e1|e3")
+        assertTrue(afterTwo.enemyBoard.first { it.instanceId == "e1" }.isFrostbitten)
+        assertFalse(afterTwo.enemyBoard.first { it.instanceId == "e2" }.isFrostbitten)
+        assertEquals(5, afterTwo.enemyBoard.first { it.instanceId == "e2" }.effectivePower)
+        assertTrue(afterTwo.enemyBoard.first { it.instanceId == "e3" }.isFrostbitten)
+        assertTrue(afterTwo.playerHand.any { it.instanceId == "d_1" })
+
+        // Selecting single target "e2" must frostbite ONLY e2 and NOT auto-select another enemy
+        val afterOne = CombatEngine.playCardFromHand(baseState, "hc_hw", targetUnitId = "e2")
+        assertFalse(afterOne.enemyBoard.first { it.instanceId == "e1" }.isFrostbitten)
+        assertTrue(afterOne.enemyBoard.first { it.instanceId == "e2" }.isFrostbitten)
+        assertFalse(afterOne.enemyBoard.first { it.instanceId == "e3" }.isFrostbitten)
+
+        // Anivia champion spell with "e1|e3" also frostbites ONLY e1 and e3 and shuffles Anivia into deck
+        val afterAniviaSpell = CombatEngine.playCardFromHand(baseState, "hc_anivia_hw", targetUnitId = "e1|e3")
+        assertTrue(afterAniviaSpell.enemyBoard.first { it.instanceId == "e1" }.isFrostbitten)
+        assertFalse(afterAniviaSpell.enemyBoard.first { it.instanceId == "e2" }.isFrostbitten)
+        assertTrue(afterAniviaSpell.enemyBoard.first { it.instanceId == "e3" }.isFrostbitten)
+        assertTrue(afterAniviaSpell.playerDrawPile.any { it.template.id == "card_anivia" })
+    }
+
+    @Test
+    fun `burstDirectNexusDamageSpellSkipsTargetSelectionAndHitsNexusImmediately`() {
+        val adv = AdventureCatalog.getAdventure("adv_demacia_outskirts")
+        val node = adv.mapNodes.first { it.id == "d_fight_1a" }
+        val ignition = CardCatalog.getCard("card_ignition")
+        val mysticShot = CardCatalog.getCard("card_mystic_shot")
+        val superRocket = CardCatalog.getCard("card_super_mega_rocket")
+
+        assertTrue(CombatEngine.isBurstDirectNexusDamageSpell(ignition))
+        assertFalse(CombatEngine.requiresPlayerTarget(ignition))
+        assertEquals(0, CombatEngine.requiredPlayerTargetCount(ignition))
+
+        // Fast/Slow damage spells are not burst direct nexus spells
+        assertFalse(CombatEngine.isBurstDirectNexusDamageSpell(mysticShot))
+        assertTrue(CombatEngine.requiresPlayerTarget(mysticShot))
+        assertFalse(CombatEngine.isBurstDirectNexusDamageSpell(superRocket))
+
+        val ignCard = HandCardInstance("hc_ign", ignition, effectiveCost = 0)
+        val enemy = UnitOnBoard("e1", CardCatalog.getCard("card_cithria"), false, 2, 2, 2, emptySet())
+        val state = CombatState(
+            encounterNode = node,
+            adventure = adv,
+            championId = "champ_lux",
+            starLevel = 1,
+            equippedRelics = emptyList(),
+            activePowers = emptyList(),
+            mutators = emptyList(),
+            playerNexusHp = 30,
+            playerMaxHp = 30,
+            enemyNexusHp = 15,
+            enemyMaxHp = 20,
+            playerMana = 3,
+            playerMaxMana = 3,
+            playerHand = listOf(ignCard),
+            enemyBoard = listOf(enemy),
+            phase = CombatPhase.MAIN_ACTION_PHASE,
+            priorityHolder = PriorityHolder.PLAYER
+        )
+
+        val after = CombatEngine.playCardFromHand(state, "hc_ign", targetUnitId = null)
+        assertEquals(14, after.enemyNexusHp)
+        assertEquals(2, after.enemyBoard.first().health)
+        assertEquals(PriorityHolder.PLAYER, after.priorityHolder)
+        assertTrue(after.spellStack.isEmpty())
+    }
+
+    @Test
+    fun `shadowIsles5StarMapProgressionTwoPowerDraftsAndSharedStartingRules`() = runTest(testDispatcher) {
+        val adv = AdventureCatalog.getAdventure("adv_shadow_isles_5star")
+        assertEquals(5.0f, adv.starRating, 0.01f)
+        assertEquals(listOf("mut_deadly", "mut_shadow_mist"), adv.mutators.map { it.id })
+
+        val repo = GameRepository(FakeGameDao(), testDispatcher)
+        repo.ensureSeeded()
+        val vm = GameViewModel(repo, aiStepDelayMs = 700L)
+        advanceUntilIdle()
+
+        vm.startAdventure("adv_shadow_isles_5star")
+        runCurrent()
+        assertEquals(AppScreen.AdventureMap, vm.uiState.value.screen)
+        assertEquals("si_start", vm.uiState.value.activeRun?.currentNodeId)
+
+        // Power Draft 1 (si_power_1 -> si_power_2)
+        vm.selectMapNode("si_power_1")
+        runCurrent()
+        assertEquals(AppScreen.PowerDraft, vm.uiState.value.screen)
+        val p1 = vm.uiState.value.powerDraftOptions.first()
+        vm.pickPowerReward(p1)
+        runCurrent()
+        assertEquals(AppScreen.AdventureMap, vm.uiState.value.screen)
+
+        // Power Draft 2 (si_power_2 -> si_midboss_fiora)
+        vm.selectMapNode("si_power_2")
+        runCurrent()
+        assertEquals(AppScreen.PowerDraft, vm.uiState.value.screen)
+        val p2 = vm.uiState.value.powerDraftOptions.first()
+        vm.pickPowerReward(p2)
+        runCurrent()
+        assertEquals(2, vm.uiState.value.activeRun?.activePowerIds?.size)
+
+        // Enter Fight 1: Fiora Mini-Boss
+        vm.selectMapNode("si_midboss_fiora")
+        runCurrent()
+        assertEquals(AppScreen.Combat, vm.uiState.value.screen)
+        val combat = vm.uiState.value.combatState!!
+        assertEquals(PriorityHolder.PLAYER, combat.priorityHolder)
+        assertTrue(combat.playerHasAttackToken)
+        assertFalse(combat.enemyHasAttackToken)
+        assertEquals(5, combat.enemyMana)
+        assertEquals(5, combat.enemyMaxMana)
+
+        // Fiora 9/9 with Chí Tử (+ceil(9/2) = +5) -> 14/14 on board
+        val fioraOnBoard = combat.enemyBoard.firstOrNull { it.template.id == "card_fiora" }
+        assertNotNull(fioraOnBoard)
+        assertEquals(14, fioraOnBoard!!.power)
+        assertEquals(14, fioraOnBoard.health)
+
+        // Advancing rounds scales enemy mana 5 -> 6 -> 7 -> 8 -> 9 -> 10
+        val r2 = CombatEngine.advanceToNextRound(combat.copy(enemyMana = 0), mutableListOf())
+        assertEquals(6, r2.enemyMaxMana)
+        assertTrue(r2.enemyHasAttackToken)
+        // Sương Biến Ảo triggers on Round 2 because Enemy holds Attack Token -> Mist spawned + buffed
+        assertTrue(r2.enemyBoard.any { it.template.id == "card_encroaching_mist" })
+        val r3 = CombatEngine.advanceToNextRound(r2.copy(enemyMana = 0), mutableListOf())
+        assertEquals(7, r3.enemyMaxMana)
+    }
+
+    @Test
+    fun `deadlyAndShadowMistMutatorsRoundUpStatsDoubleSpellDamageAndBuffMists`() {
+        val adv = AdventureCatalog.getAdventure("adv_shadow_isles_5star")
+        val fioraNode = adv.mapNodes.first { it.id == "si_midboss_fiora" }
+        val viegoNode = adv.mapNodes.first { it.id == "si_boss_viego" }
+
+        val logs = mutableListOf<String>()
+        val baseState = CombatState(
+            encounterNode = viegoNode,
+            adventure = adv,
+            championId = "champ_anivia",
+            starLevel = 1,
+            equippedRelics = emptyList(),
+            activePowers = emptyList(),
+            mutators = adv.mutators,
+            playerNexusHp = 30,
+            playerMaxHp = 30,
+            enemyNexusHp = 50,
+            enemyMaxHp = 50,
+            playerMana = 5,
+            playerMaxMana = 5,
+            enemyMana = 5,
+            enemyMaxMana = 5,
+            enemyHand = listOf(CardCatalog.getCard("card_laurent_bladekeeper"), CardCatalog.getCard("card_badgerbear")),
+            playerBoard = listOf(
+                UnitOnBoard("p_tank", CardCatalog.getCard("card_guardian_follower"), true, 4, 12, 12, emptySet())
+            ),
+            phase = CombatPhase.MAIN_ACTION_PHASE,
+            priorityHolder = PriorityHolder.ENEMY
+        )
+
+        // Chí Tử rounding check: 5/4 -> +3/+2 = 8/6; 4/6 -> +2/+3 = 6/9; Viego 6/5 -> +3/+3 = 9/8
+        val sViego = CombatEngine.summonEnemyUnitFromPool(baseState, CardCatalog.getCard("card_viego"), 0, logs)
+        val viego = sViego.enemyBoard.first { it.template.id == "card_viego" }
+        assertEquals(9, viego.power)
+        assertEquals(8, viego.health)
+
+        val sLaurent = CombatEngine.summonEnemyUnitFromPool(sViego, CardCatalog.getCard("card_laurent_bladekeeper"), 0, logs)
+        val laurent = sLaurent.enemyBoard.first { it.template.id == "card_laurent_bladekeeper" }
+        assertEquals(8, laurent.power)
+        assertEquals(6, laurent.health)
+        // Laurent buffs strongest existing ally (Viego 9/8 -> 11/10)
+        assertEquals(11, sLaurent.enemyBoard.first { it.template.id == "card_viego" }.power)
+
+        val sBear = CombatEngine.summonEnemyUnitFromPool(sLaurent, CardCatalog.getCard("card_badgerbear"), 0, logs)
+        val bear = sBear.enemyBoard.first { it.template.id == "card_badgerbear" }
+        assertEquals(6, bear.power)
+        assertEquals(9, bear.health)
+
+        // Chí Tử doubles enemy spell damage (Bàn Tay Chết Chóc base 5 -> 10 damage)
+        val spearCard = CardCatalog.getCard("card_black_spear_custom")
+        assertEquals(10, CombatEngine.calculateFinalDamage(spearCard.effectValue, spearCard, sBear, sourceIsPlayer = false))
+        val targetSpec = "${bear.instanceId}|p_tank"
+        val afterSpear = CombatEngine.resolveSpellStack(
+            sBear.copy(
+                spellStack = listOf(SpellStackEntry("sp_1", false, spearCard, targetUnitId = targetSpec)),
+                phase = CombatPhase.SPELL_STACK_PHASE
+            )
+        )
+        assertFalse(afterSpear.enemyBoard.any { it.instanceId == bear.instanceId })
+        assertEquals(2, afterSpear.playerBoard.first { it.instanceId == "p_tank" }.health)
+
+        // Sương Biến Ảo triggers only when Enemy holds Attack Token (Round 2 -> true, Round 3 -> false)
+        val round2 = CombatEngine.advanceToNextRound(baseState.copy(encounterNode = fioraNode), mutableListOf())
+        assertTrue(round2.enemyHasAttackToken)
+        // +1 from Sương Biến Ảo + 1 from the summoned Mist's own On Summon effect = 2
+        assertEquals(2, round2.enemyMistStatBonus)
+        val mistR2 = round2.enemyBoard.first { it.template.id == "card_encroaching_mist" }
+        // Base 1/1 + mistBonus(1 -> 2/2) + Chí Tử(ceil(2/2)=1 -> 3/3) + Mist's own +1/+1 -> 4/4
+        assertEquals(4, mistR2.power)
+        assertEquals(4, mistR2.health)
+        val round3 = CombatEngine.advanceToNextRound(round2, mutableListOf())
+        assertFalse(round3.enemyHasAttackToken)
+        // Mist died at Round End (Ephemeral), and Round 3 Player holds Attack Token so Sương Biến Ảo did NOT trigger
+        assertEquals(2, round3.enemyMistStatBonus)
+        assertFalse(round3.enemyBoard.any { it.template.id == "card_encroaching_mist" })
+    }
+
+    @Test
+    fun `fioraEncounterCardsAndShowdownPowerWorkCorrectly`() {
+        val adv = AdventureCatalog.getAdventure("adv_shadow_isles_5star")
+        val fioraNode = adv.mapNodes.first { it.id == "si_midboss_fiora" }
+        val logs = mutableListOf<String>()
+
+        var state = CombatState(
+            encounterNode = fioraNode,
+            adventure = adv,
+            championId = "champ_anivia",
+            starLevel = 1,
+            equippedRelics = emptyList(),
+            activePowers = emptyList(),
+            mutators = adv.mutators,
+            playerNexusHp = 30,
+            playerMaxHp = 30,
+            enemyNexusHp = 38,
+            enemyMaxHp = 38,
+            playerMana = 5,
+            playerMaxMana = 5,
+            enemyMana = 5,
+            enemyMaxMana = 5,
+            playerBoard = listOf(
+                UnitOnBoard("p1", CardCatalog.getCard("card_cithria"), true, 2, 2, 2, emptySet())
+            ),
+            phase = CombatPhase.MAIN_ACTION_PHASE,
+            priorityHolder = PriorityHolder.ENEMY
+        )
+
+        // Summon Fleetfeather Tracker (gains Challenger when another ally is summoned), Speaker, Tiana, Poro
+        state = CombatEngine.summonEnemyUnitFromPool(state, CardCatalog.getCard("card_fleetfeather_tracker"), 0, logs)
+        val trackerInitial = state.enemyBoard.first { it.template.id == "card_fleetfeather_tracker" }
+        assertFalse(trackerInitial.keywords.contains(Keyword.CHALLENGER))
+
+        state = CombatEngine.summonEnemyUnitFromPool(state, CardCatalog.getCard("card_dawnspeakers"), 0, logs)
+        val trackerAfterSummon = state.enemyBoard.first { it.template.id == "card_fleetfeather_tracker" }
+        assertTrue(trackerAfterSummon.keywords.contains(Keyword.CHALLENGER))
+
+        // Tiana grants TOUGH to whole enemy team
+        state = CombatEngine.summonEnemyUnitFromPool(state, CardCatalog.getCard("card_tiana_crownguard"), 0, logs)
+        assertTrue(state.enemyBoard.all { it.keywords.contains(Keyword.TOUGH) })
+
+        // Thời Khắc Đối Đầu grants +2|+2 + TOUGH on Challenge for the round, removed at Round End
+        val afterShowdown = CombatEngine.grantEnemyChallengerShowdownBuff(state, trackerAfterSummon.instanceId, logs)
+        val buffedTracker = afterShowdown.enemyBoard.first { it.instanceId == trackerAfterSummon.instanceId }
+        assertEquals(trackerAfterSummon.power + 2, buffedTracker.power)
+        assertEquals(trackerAfterSummon.health + 2, buffedTracker.health)
+        assertTrue(buffedTracker.keywords.contains(Keyword.TOUGH))
+
+        // Speaker Round End trigger when an enemy ally died this round
+        val speakerState = CombatEngine.removeUnit(afterShowdown, trackerAfterSummon.instanceId, isEnemy = true, logs = logs)
+        val tianaBeforeEnd = speakerState.enemyBoard.first { it.template.id == "card_tiana_crownguard" }
+        val afterRoundEnd = CombatEngine.advanceToNextRound(speakerState, mutableListOf())
+        val tianaAfterEnd = afterRoundEnd.enemyBoard.first { it.template.id == "card_tiana_crownguard" }
+        assertEquals(tianaBeforeEnd.power + 1, tianaAfterEnd.power)
+        assertEquals(tianaBeforeEnd.health + 1, tianaAfterEnd.health)
+        // Permanent Tough on Tiana is preserved across round end
+        assertTrue(tianaAfterEnd.keywords.contains(Keyword.TOUGH))
+    }
+
+    @Test
+    fun `viegoBossPowerLevelUpCardsAndPossessionWorkCorrectly`() {
+        val adv = AdventureCatalog.getAdventure("adv_shadow_isles_5star")
+        val viegoNode = adv.mapNodes.first { it.id == "si_boss_viego" }
+        val logs = mutableListOf<String>()
+
+        var state = CombatState(
+            encounterNode = viegoNode,
+            adventure = adv,
+            championId = "champ_anivia",
+            starLevel = 1,
+            equippedRelics = emptyList(),
+            activePowers = emptyList(),
+            mutators = adv.mutators,
+            playerNexusHp = 30,
+            playerMaxHp = 30,
+            enemyNexusHp = 50,
+            enemyMaxHp = 50,
+            playerMana = 10,
+            playerMaxMana = 10,
+            enemyMana = 10,
+            enemyMaxMana = 10,
+            playerBoard = listOf(
+                UnitOnBoard("p_fodder", CardCatalog.getCard("card_cithria"), true, 2, 2, 2, emptySet()),
+                UnitOnBoard("p_big", CardCatalog.getCard("card_guardian_follower"), true, 7, 7, 7, emptySet())
+            ),
+            phase = CombatPhase.MAIN_ACTION_PHASE,
+            priorityHolder = PriorityHolder.ENEMY
+        )
+
+        // Summon Viego + Aristocrat + Soldier -> 4 units on board (room for Aristocrat Last Breath Spiderling + Viego Mist)
+        state = CombatEngine.summonEnemyUnitFromPool(state, CardCatalog.getCard("card_viego"), 0, logs)
+        state = CombatEngine.summonEnemyUnitFromPool(state, CardCatalog.getCard("card_hapless_aristocrat"), 0, logs)
+
+        // Soldier summons 1 Mist -> Mist buffs Viego & Mists
+        val viegoBeforeMist = state.enemyBoard.first { it.template.id == "card_viego" }
+        state = CombatEngine.summonEnemyUnitFromPool(state, CardCatalog.getCard("card_camavoran_soldier"), 0, logs)
+        assertTrue(state.enemyBoard.any { it.template.id == "card_encroaching_mist" })
+        val viegoAfterMist = state.enemyBoard.first { it.template.id == "card_viego" }
+        assertEquals(viegoBeforeMist.power + 1, viegoAfterMist.power)
+        assertEquals(viegoBeforeMist.health + 1, viegoAfterMist.health)
+
+        // Aristocrat death summons Spiderling AND triggers Viego first-death Mist summon this round
+        val mistCountBeforeDeath = state.enemyBoard.count { it.template.id == "card_encroaching_mist" }
+        val aristocrat = state.enemyBoard.first { it.template.id == "card_hapless_aristocrat" }
+        state = CombatEngine.removeUnit(state, aristocrat.instanceId, isEnemy = true, logs = logs)
+        assertTrue(state.enemyBoard.any { it.template.id == "card_spiderling" })
+        assertTrue(state.enemyBoard.count { it.template.id == "card_encroaching_mist" } >= mistCountBeforeDeath + 1)
+
+        // Also test Fading Icon On Summon -> summons 1 Spiderling (after freeing 1 slot)
+        val firstMist = state.enemyBoard.first { it.template.id == "card_encroaching_mist" }
+        val iconState = CombatEngine.summonEnemyUnitFromPool(
+            CombatEngine.removeUnit(state, firstMist.instanceId, isEnemy = true, logs = logs),
+            CardCatalog.getCard("card_fading_icon"),
+            0,
+            logs
+        )
+        assertTrue(iconState.enemyBoard.count { it.template.id == "card_spiderling" } >= 2)
+
+        // Chiếm Hữu (Possess) steals player follower for this round and returns it at Round End
+        val possessCard = CardCatalog.getCard("card_possession")
+        state = CombatEngine.resolveSpellStack(
+            state.copy(
+                spellStack = listOf(SpellStackEntry("sp_pos", false, possessCard, targetUnitId = "p_big")),
+                phase = CombatPhase.SPELL_STACK_PHASE
+            )
+        )
+        assertTrue(state.enemyBoard.any { it.instanceId == "p_big" })
+        assertFalse(state.playerBoard.any { it.instanceId == "p_big" })
+
+        // Player strongest follower dies -> Hoàng Đế Thống Trị summons Ephemeral copy next Round Start
+        state = CombatEngine.removeUnit(state, "p_fodder", isEnemy = false, logs = logs)
+        val round2 = CombatEngine.advanceToNextRound(state, mutableListOf())
+        // p_big returned to player at Round End before next round hooks!
+        assertTrue(round2.playerBoard.any { it.instanceId == "p_big" })
+        // Hoàng Đế Thống Trị revived an Ephemeral copy of Cithria (p_fodder)
+        assertTrue(round2.enemyBoard.any { it.template.id == "card_cithria" && it.keywords.contains(Keyword.EPHEMERAL) })
+
+        // Rồng Camavor kills enemy -> drains 1 Nexus HP
+        val dragonCard = CardCatalog.getCard("card_camavoran_dragon")
+        val dragonState = CombatState(
+            encounterNode = viegoNode,
+            adventure = adv,
+            championId = "champ_anivia",
+            starLevel = 1,
+            equippedRelics = emptyList(),
+            activePowers = emptyList(),
+            mutators = adv.mutators,
+            playerNexusHp = 20,
+            playerMaxHp = 30,
+            enemyNexusHp = 40,
+            enemyMaxHp = 50,
+            playerMana = 10,
+            playerMaxMana = 10,
+            playerHand = listOf(HandCardInstance("hc_drag", dragonCard, effectiveCost = 4)),
+            playerBoard = listOf(
+                UnitOnBoard("p_sac", CardCatalog.getCard("card_cithria"), true, 2, 2, 2, emptySet())
+            ),
+            enemyBoard = listOf(
+                UnitOnBoard("e_tiny", CardCatalog.getCard("card_spiderling"), false, 1, 1, 1, emptySet())
+            ),
+            playerHasAttackToken = true,
+            phase = CombatPhase.MAIN_ACTION_PHASE,
+            priorityHolder = PriorityHolder.PLAYER
+        )
+        // Playing Camavoran Dragon requires sacrificing an ally
+        assertTrue(CombatEngine.canPlayCard(dragonState, dragonState.playerHand.first()))
+        val afterPlayDragon = CombatEngine.playCardFromHand(dragonState, "hc_drag", targetUnitId = "p_sac")
+        assertFalse(afterPlayDragon.playerBoard.any { it.instanceId == "p_sac" })
+        val playedDragon = afterPlayDragon.playerBoard.first { it.template.id == "card_camavoran_dragon" }
+        val afterDragonCombat = CombatEngine.resolveCombatResolution(
+            state = afterPlayDragon.copy(
+                phase = CombatPhase.COMBAT_RESOLUTION_PHASE,
+                playerInitiatedCombat = true,
+                attackingUnitIds = listOf(playedDragon.instanceId),
+                blockPairings = mapOf(playedDragon.instanceId to "e_tiny")
+            ),
+            playerIsAttacking = true,
+            logs = mutableListOf()
+        )
+        // Killed spiderling -> drained 1 HP from enemy Nexus (plus 3 Overwhelm dmg) & healed player Nexus by 1 (20 -> 21)
+        assertEquals(21, afterDragonCombat.playerNexusHp)
+        assertEquals(36, afterDragonCombat.enemyNexusHp)
+
+        // Quái Cây (Hydravine) summons Mist on Summon AND on Round Start
+        val hydraBase = CombatState(
+            encounterNode = viegoNode,
+            adventure = adv,
+            championId = "champ_anivia",
+            starLevel = 1,
+            equippedRelics = emptyList(),
+            activePowers = emptyList(),
+            mutators = emptyList(),
+            playerNexusHp = 30,
+            playerMaxHp = 30,
+            enemyNexusHp = 50,
+            enemyMaxHp = 50,
+            phase = CombatPhase.MAIN_ACTION_PHASE,
+            priorityHolder = PriorityHolder.ENEMY
+        )
+        val withHydra = CombatEngine.summonEnemyUnitFromPool(hydraBase, CardCatalog.getCard("card_invasive_hydravine"), 0, logs)
+        assertEquals(1, withHydra.enemyMistStatBonus)
+        assertTrue(withHydra.enemyBoard.any { it.template.id == "card_encroaching_mist" })
+        val afterHydraRound = CombatEngine.advanceToNextRound(withHydra, mutableListOf())
+        assertEquals(2, afterHydraRound.enemyMistStatBonus)
+        assertTrue(afterHydraRound.enemyBoard.any { it.template.id == "card_encroaching_mist" })
+
+        // Viego Lv2 Level-Up (20+ dead ally Power) -> Permanently steals strongest follower at Round Start, or kills if Champion
+        val heavyDead1 = UnitOnBoard("hd1", CardCatalog.getCard("card_tiana_crownguard"), false, 12, 5, 5, emptySet())
+        val heavyDead2 = UnitOnBoard("hd2", CardCatalog.getCard("card_tiana_crownguard"), false, 10, 5, 5, emptySet())
+        val viegoLv1 = UnitOnBoard("ev_1", CardCatalog.getCard("card_viego"), false, 9, 8, 8, setOf(Keyword.FEARSOME))
+        val preLevelState = CombatState(
+            encounterNode = viegoNode,
+            adventure = adv,
+            championId = "champ_anivia",
+            starLevel = 1,
+            equippedRelics = emptyList(),
+            activePowers = emptyList(),
+            mutators = adv.mutators,
+            playerNexusHp = 30,
+            playerMaxHp = 30,
+            enemyNexusHp = 50,
+            enemyMaxHp = 50,
+            enemyBoard = listOf(viegoLv1, heavyDead1, heavyDead2),
+            playerBoard = listOf(
+                UnitOnBoard("p_champ", CardCatalog.getCard("card_anivia"), true, 3, 4, 4, emptySet()),
+                UnitOnBoard("p_follow", CardCatalog.getCard("card_guardian_follower"), true, 6, 5, 5, emptySet())
+            ),
+            phase = CombatPhase.MAIN_ACTION_PHASE,
+            priorityHolder = PriorityHolder.ENEMY
+        )
+        var lvlState = CombatEngine.removeUnit(preLevelState, "hd1", isEnemy = true, logs = mutableListOf())
+        assertFalse(lvlState.enemyBoard.first { it.instanceId == "ev_1" }.isLeveledUp)
+        lvlState = CombatEngine.removeUnit(lvlState, "hd2", isEnemy = true, logs = mutableListOf())
+        val leveledViego = lvlState.enemyBoard.first { it.instanceId == "ev_1" }
+        // 9/8 + 1/1 (Mist from hd1 death) + 1/1 (Level Up on hd2 death) = 11/10
+        assertTrue(leveledViego.isLeveledUp)
+        assertEquals(11, leveledViego.power)
+        assertEquals(10, leveledViego.health)
+
+        // Round Start triggers Viego Lv2: permanently steals p_follow (6 power > Anivia 3 power)
+        val afterStealRound = CombatEngine.advanceToNextRound(lvlState, mutableListOf())
+        assertTrue(afterStealRound.enemyBoard.any { it.instanceId == "p_follow" })
+        assertFalse(afterStealRound.playerBoard.any { it.instanceId == "p_follow" })
+
+        // Next Round Start: Anivia (Champion) is now strongest player unit -> Viego Lv2 KILLS it (transforms into Eggnivia)
+        val afterChampKillRound = CombatEngine.advanceToNextRound(afterStealRound, mutableListOf())
+        assertFalse(afterChampKillRound.enemyBoard.any { it.instanceId == "p_champ" })
+        assertTrue(afterChampKillRound.playerBoard.any { it.template.id == "card_eggnivia" })
+    }
 }
+
+

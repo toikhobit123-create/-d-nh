@@ -123,6 +123,7 @@ fun BattleBoard(
     descFontSizeOverride: TextUnit? = null,
     highlightedTargetEnemyIds: Set<String> = emptySet(),
     highlightedTargetAllyIds: Set<String> = emptySet(),
+    preselectedTargetIds: Set<String> = emptySet(),
     onPlayerBenchBoundsChanged: (Rect) -> Unit = {},
     onSharedBattlefieldBoundsChanged: (Rect) -> Unit = {},
     onEnemyAttackerBoundsChanged: (String, Rect) -> Unit = { _, _ -> },
@@ -209,6 +210,7 @@ fun BattleBoard(
                 dropHighlight = BattleBoardDropHighlight.NONE,
                 draggingUnitId = null,
                 highlightedTargetIds = highlightedTargetEnemyIds,
+                preselectedTargetIds = preselectedTargetIds,
                 zoneTestTag = "enemy_bench_zone",
                 modifier = Modifier
                     .fillMaxWidth()
@@ -238,6 +240,7 @@ fun BattleBoard(
                 draggedCombatUnit = draggedCombatUnit,
                 highlightedTargetEnemyIds = highlightedTargetEnemyIds,
                 highlightedTargetAllyIds = highlightedTargetAllyIds,
+                preselectedTargetIds = preselectedTargetIds,
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(fieldWeight),
@@ -268,6 +271,7 @@ fun BattleBoard(
                 dropHighlight = playerBenchHighlight,
                 draggingUnitId = draggingBenchUnitId,
                 highlightedTargetIds = highlightedTargetAllyIds,
+                preselectedTargetIds = preselectedTargetIds,
                 zoneTestTag = "player_bench_zone",
                 modifier = Modifier
                     .fillMaxWidth()
@@ -297,6 +301,7 @@ private fun SeamlessBenchZone(
     dropHighlight: BattleBoardDropHighlight,
     draggingUnitId: String?,
     highlightedTargetIds: Set<String>,
+    preselectedTargetIds: Set<String> = emptySet(),
     zoneTestTag: String,
     modifier: Modifier = Modifier,
     onUnitBoundsChanged: (String, Rect) -> Unit,
@@ -427,6 +432,7 @@ private fun SeamlessBenchZone(
                             isSelected = (isEnemy && combat.selectedEnemyAttackerForBlock == unit.instanceId) ||
                                 isTargetHighlighted ||
                                 isChallengerEligible,
+                            isTargetLocked = preselectedTargetIds.contains(unit.instanceId),
                             isValidBlockCandidate = targetEnemy != null && unit.canBlockAttacker(targetEnemy),
                             isDragging = draggingUnitId == unit.instanceId,
                             tileWidth = tileWidth,
@@ -460,6 +466,7 @@ private fun SeamlessIceBattlefieldZone(
     draggedCombatUnit: UnitOnBoard? = null,
     highlightedTargetEnemyIds: Set<String>,
     highlightedTargetAllyIds: Set<String>,
+    preselectedTargetIds: Set<String> = emptySet(),
     modifier: Modifier = Modifier,
     onBoundsChanged: (Rect) -> Unit,
     onEnemyAttackerBoundsChanged: (String, Rect) -> Unit,
@@ -548,6 +555,7 @@ private fun SeamlessIceBattlefieldZone(
                                         unit = aiBlocker,
                                         isBlockingLabel = if (isChallengedPreview) "BỊ KÉO" else "CHẶN",
                                         isSelected = highlightedTargetEnemyIds.contains(aiBlocker.instanceId),
+                                        isTargetLocked = preselectedTargetIds.contains(aiBlocker.instanceId),
                                         tileWidth = pairTileWidth,
                                         tileHeight = pairTileHeight,
                                         statFontSize = (statFontSize.value * 0.85f).coerceAtLeast(10f).sp,
@@ -688,6 +696,7 @@ private fun SeamlessIceBattlefieldZone(
                                     isAttacking = true,
                                     isSelected = isChallengerSelected || highlightedTargetAllyIds.contains(atk.instanceId) ||
                                         (combat.phase == CombatPhase.COMBAT_DECLARE_ATTACK_PHASE && highlightedTargetAllyIds.isEmpty() && highlightedTargetEnemyIds.isEmpty()),
+                                    isTargetLocked = preselectedTargetIds.contains(atk.instanceId),
                                     isDragging = draggingUnitId == atk.instanceId,
                                     tileWidth = pairTileWidth,
                                     tileHeight = pairTileHeight,
@@ -749,6 +758,7 @@ private fun SeamlessIceBattlefieldZone(
                                     unit = enemyAtk,
                                     isAttacking = true,
                                     isSelected = isTargeted || canDraggedBlockThis || highlightedTargetEnemyIds.contains(enemyAtk.instanceId),
+                                    isTargetLocked = preselectedTargetIds.contains(enemyAtk.instanceId),
                                     tileWidth = pairTileWidth,
                                     tileHeight = pairTileHeight,
                                     statFontSize = (statFontSize.value * 0.85f).coerceAtLeast(10f).sp,

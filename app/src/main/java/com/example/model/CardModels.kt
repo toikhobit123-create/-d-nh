@@ -82,7 +82,9 @@ enum class CardEffectType {
     SUMMON_TWO_GIANTS,
     DRAIN,
     FREE_ATTACK,
-    RALLY
+    RALLY,
+    SACRIFICE_DAMAGE,
+    POSSESS_UNIT
 }
 
 data class CardTemplate(
@@ -109,7 +111,9 @@ data class CardTemplate(
     val rarity: Rarity = Rarity.COMMON,
     val supportPowerBonus: Int = 0,
     val supportHealthBonus: Int = 0,
-    val supportKeyword: Keyword? = null
+    val supportKeyword: Keyword? = null,
+    val requiresAllySacrificeOnPlay: Boolean = false,
+    val isDragon: Boolean = false
 )
 
 data class DeckCardEntry(

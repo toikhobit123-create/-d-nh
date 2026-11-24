@@ -81,12 +81,14 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.example.engine.CombatEngine
 import com.example.engine.CombatPhase
 import com.example.engine.CombatState
 import com.example.engine.PriorityHolder
 import com.example.engine.SpellStackEntry
 import com.example.model.CardCatalog
 import com.example.model.CardEffectType
+import com.example.model.CardTemplate
 import com.example.model.CardType
 import com.example.model.HandCardInstance
 import com.example.model.Keyword
@@ -383,9 +385,8 @@ fun CombatScreen(
     var prevPlayerBoardIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var prevEnemyBoardIds by remember { mutableStateOf<Set<String>>(emptySet()) }
 
-    fun resolveTargetNorm(targetUnitId: String?): Offset? {
-        if (targetUnitId == null || rootSize.width <= 0 || rootSize.height <= 0) return null
-        val rawId = if (targetUnitId.contains("|")) targetUnitId.substringAfter("|") else targetUnitId
+    fun resolveSingleTargetNorm(rawId: String): Offset? {
+        if (rootSize.width <= 0 || rootSize.height <= 0) return null
         val rect = when (rawId) {
             "ENEMY_NEXUS", "NEXUS" -> enemyNexusBounds.takeIf { it != Rect.Zero }
             else -> enemyUnitBounds[rawId] ?: playerUnitBounds[rawId]
@@ -395,6 +396,24 @@ fun CombatScreen(
             x = (localCenter.x / rootSize.width.toFloat()).coerceIn(0.05f, 0.95f),
             y = (localCenter.y / rootSize.height.toFloat()).coerceIn(0.05f, 0.95f)
         )
+    }
+
+    fun resolveTargetNorms(card: CardTemplate, targetUnitId: String?): Pair<Offset?, List<Offset>> {
+        val effectiveId = targetUnitId ?: when {
+            CombatEngine.isBurstDirectNexusDamageSpell(card) ||
+                card.effectType == CardEffectType.DEAL_DAMAGE_NEXUS ||
+                card.effectType == CardEffectType.DEAL_DAMAGE_UNIT_AND_NEXUS -> "ENEMY_NEXUS"
+            else -> null
+        }
+        if (effectiveId == null || rootSize.width <= 0 || rootSize.height <= 0) return null to emptyList()
+        val parts = effectiveId.split("|").map { it.trim() }.filter { it.isNotBlank() }
+        val offsets = parts.mapNotNull { part -> resolveSingleTargetNorm(part) }
+        return when {
+            offsets.isEmpty() -> null to emptyList()
+            card.effectType == CardEffectType.SINGLE_COMBAT_STRIKE && offsets.size >= 2 ->
+                offsets.last() to listOf(offsets.first())
+            else -> offsets.first() to offsets.drop(1)
+        }
     }
 
     LaunchedEffect(
@@ -430,11 +449,13 @@ fun CombatScreen(
             val targetMap = if (entry.sourceIsPlayer) handledPlayerIds else handledEnemyIds
             targetMap[entry.card.id] = (targetMap[entry.card.id] ?: 0) + 1
             vfxSeq++
+            val (primaryNorm, extraNorms) = resolveTargetNorms(entry.card, entry.targetUnitId)
             newEvents += SpellSkillVfxEvent(
                 id = "vfx_${vfxSeq}_${entry.card.id}",
                 card = entry.card,
                 sourceIsPlayer = entry.sourceIsPlayer,
-                targetCenterNorm = resolveTargetNorm(entry.targetUnitId),
+                targetCenterNorm = primaryNorm,
+                extraTargetNorms = extraNorms,
                 isSkill = entry.card.spellSpeed == SpellSpeed.SKILL
             )
         }
@@ -452,11 +473,13 @@ fun CombatScreen(
                             lastPlayerTargetHint = null
                         }
                         vfxSeq++
+                        val (primaryNorm, extraNorms) = resolveTargetNorms(card, hintTarget)
                         newEvents += SpellSkillVfxEvent(
                             id = "vfx_${vfxSeq}_${card.id}",
                             card = card,
                             sourceIsPlayer = true,
-                            targetCenterNorm = resolveTargetNorm(hintTarget),
+                            targetCenterNorm = primaryNorm,
+                            extraTargetNorms = extraNorms,
                             isSkill = card.spellSpeed == SpellSpeed.SKILL
                         )
                     }
@@ -500,7 +523,7 @@ fun CombatScreen(
                     id = "vfx_${vfxSeq}_${u.template.id}",
                     card = u.template,
                     sourceIsPlayer = true,
-                    targetCenterNorm = resolveTargetNorm(u.instanceId),
+                    targetCenterNorm = resolveSingleTargetNorm(u.instanceId),
                     isSkill = true
                 )
             }
@@ -512,7 +535,7 @@ fun CombatScreen(
                     id = "vfx_${vfxSeq}_${u.template.id}",
                     card = u.template,
                     sourceIsPlayer = false,
-                    targetCenterNorm = resolveTargetNorm(u.instanceId),
+                    targetCenterNorm = resolveSingleTargetNorm(u.instanceId),
                     isSkill = true
                 )
             }
@@ -584,13 +607,22 @@ fun CombatScreen(
         }
         val hitEnemyNexus = pointer != null && enemyNexusBounds.inflate(targetHitPadPx).contains(pointer)
 
+        val isTwoTargetFrostbite = card.template.effectType == CardEffectType.FROSTBITE_TWO ||
+            card.template.effectType == CardEffectType.ANIVIA_CHAMPION_SPELL
+
         when {
-            card.template.type == CardType.EQUIPMENT || card.template.id == "card_brightsteel_protector" -> {
+            CombatEngine.isBurstDirectNexusDamageSpell(card.template) -> {
+                // Bài phép Siêu Tốc gây sát thương lên Nhà Chính: thi triển ngay lập tức không cần chọn mục tiêu
+                dispatchTargetedCard(card, "ENEMY_NEXUS")
+            }
+            card.template.type == CardType.EQUIPMENT ||
+                card.template.id == "card_brightsteel_protector" ||
+                card.template.requiresAllySacrificeOnPlay -> {
                 when {
                     hitAllyId != null -> dispatchTargetedCard(card, hitAllyId)
                     allyTargets.isEmpty() -> {
-                        if (card.template.type == CardType.EQUIPMENT) {
-                            dragWarningText = "Cần có đồng minh trên bàn để trang bị!"
+                        if (card.template.type == CardType.EQUIPMENT || card.template.requiresAllySacrificeOnPlay) {
+                            dragWarningText = "Cần có đồng minh trên bàn!"
                         } else {
                             dispatchTargetedCard(card, null)
                         }
@@ -614,18 +646,38 @@ fun CombatScreen(
                     }
                 }
             }
-            card.template.effectType == CardEffectType.STUN_TARGET ||
-                card.template.effectType == CardEffectType.FROSTBITE_TARGET ||
-                card.template.effectType == CardEffectType.FROSTBITE_TWO ||
-                card.template.effectType == CardEffectType.ANIVIA_CHAMPION_SPELL ||
-                card.template.effectType == CardEffectType.RECALL_OR_STUN -> {
+            isTwoTargetFrostbite -> {
                 when {
                     enemyTargets.isEmpty() -> {
-                        if (card.template.effectType == CardEffectType.ANIVIA_CHAMPION_SPELL) {
-                            dispatchTargetedCard(card, null)
+                        // Mô tả "tối đa 2 kẻ địch": khi sân địch trống vẫn thi triển để rút lá / tráo Anivia
+                        dispatchTargetedCard(card, null)
+                    }
+                    enemyTargets.size == 1 -> {
+                        if (hitEnemyId != null) {
+                            dispatchTargetedCard(card, hitEnemyId)
                         } else {
-                            dragWarningText = "Không có kẻ địch hợp lệ để chọn mục tiêu!"
+                            pendingTargetCard = card
+                            pendingFirstUnitId = null
                         }
+                    }
+                    hitEnemyId != null -> {
+                        // Đã kéo thả lên kẻ địch #1 -> khóa mục tiêu #1 và chờ chọn kẻ địch #2
+                        pendingTargetCard = card
+                        pendingFirstUnitId = hitEnemyId
+                    }
+                    else -> {
+                        pendingTargetCard = card
+                        pendingFirstUnitId = null
+                    }
+                }
+            }
+            card.template.effectType == CardEffectType.STUN_TARGET ||
+                card.template.effectType == CardEffectType.FROSTBITE_TARGET ||
+                card.template.effectType == CardEffectType.RECALL_OR_STUN ||
+                card.template.effectType == CardEffectType.POSSESS_UNIT -> {
+                when {
+                    enemyTargets.isEmpty() -> {
+                        dragWarningText = "Không có kẻ địch hợp lệ để chọn mục tiêu!"
                     }
                     hitEnemyId != null -> dispatchTargetedCard(card, hitEnemyId)
                     else -> {
@@ -655,10 +707,15 @@ fun CombatScreen(
                     }
                 }
             }
-            card.template.effectType == CardEffectType.SINGLE_COMBAT_STRIKE -> {
+            card.template.effectType == CardEffectType.SINGLE_COMBAT_STRIKE ||
+                card.template.effectType == CardEffectType.SACRIFICE_DAMAGE -> {
                 when {
                     allyTargets.isEmpty() || enemyTargets.isEmpty() -> {
-                        dragWarningText = "Cần ít nhất 1 đồng minh và 1 kẻ địch để Đấu Tay Đôi!"
+                        dragWarningText = if (card.template.effectType == CardEffectType.SACRIFICE_DAMAGE) {
+                            "Cần ít nhất 1 đồng minh và 1 kẻ địch!"
+                        } else {
+                            "Cần ít nhất 1 đồng minh và 1 kẻ địch để Đấu Tay Đôi!"
+                        }
                     }
                     hitAllyId != null -> {
                         pendingTargetCard = card
@@ -972,9 +1029,12 @@ fun CombatScreen(
                 activePendingCard.template.effectType == CardEffectType.FROSTBITE_TARGET ||
                 activePendingCard.template.effectType == CardEffectType.FROSTBITE_TWO ||
                 activePendingCard.template.effectType == CardEffectType.ANIVIA_CHAMPION_SPELL ||
-                activePendingCard.template.effectType == CardEffectType.RECALL_OR_STUN ->
+                activePendingCard.template.effectType == CardEffectType.RECALL_OR_STUN ||
+                activePendingCard.template.effectType == CardEffectType.POSSESS_UNIT ->
                 combat.enemyBoard.filter { it.template.type != CardType.LANDMARK }.map { it.instanceId }.toSet()
-            activePendingCard.template.effectType == CardEffectType.SINGLE_COMBAT_STRIKE && pendingFirstUnitId != null ->
+            (activePendingCard.template.effectType == CardEffectType.SINGLE_COMBAT_STRIKE ||
+                activePendingCard.template.effectType == CardEffectType.SACRIFICE_DAMAGE) &&
+                pendingFirstUnitId != null ->
                 combat.enemyBoard.filter { it.template.type != CardType.LANDMARK }.map { it.instanceId }.toSet()
             else -> emptySet()
         }
@@ -982,12 +1042,15 @@ fun CombatScreen(
             activePendingCard == null -> emptySet()
             activePendingCard.template.type == CardType.EQUIPMENT ||
                 activePendingCard.template.id == "card_brightsteel_protector" ||
+                activePendingCard.template.requiresAllySacrificeOnPlay ||
                 activePendingCard.template.effectType == CardEffectType.GIVE_BARRIER_AND_DRAW ||
                 activePendingCard.template.effectType == CardEffectType.RALLY_AND_SHIELD ->
                 combat.playerBoard.filter { it.template.type != CardType.LANDMARK }.map { it.instanceId }.toSet()
             activePendingCard.template.effectType == CardEffectType.FREE_ATTACK ->
                 combat.playerBoard.filter { it.template.type != CardType.LANDMARK && it.canAttack }.map { it.instanceId }.toSet()
-            activePendingCard.template.effectType == CardEffectType.SINGLE_COMBAT_STRIKE && pendingFirstUnitId == null ->
+            (activePendingCard.template.effectType == CardEffectType.SINGLE_COMBAT_STRIKE ||
+                activePendingCard.template.effectType == CardEffectType.SACRIFICE_DAMAGE) &&
+                pendingFirstUnitId == null ->
                 combat.playerBoard.filter { it.template.type != CardType.LANDMARK }.map { it.instanceId }.toSet()
             else -> emptySet()
         }
@@ -995,17 +1058,46 @@ fun CombatScreen(
         val onEnemyUnitClick: (UnitOnBoard) -> Unit = { unit ->
             inspectedHandCard = null
             if (activePendingCard != null && highlightedTargetEnemyIds.contains(unit.instanceId)) {
-                if (activePendingCard.template.effectType == CardEffectType.SINGLE_COMBAT_STRIKE) {
-                    val allyId = pendingFirstUnitId
-                    if (allyId != null) {
-                        dispatchTargetedCard(activePendingCard, "$allyId|${unit.instanceId}")
+                val isTwoTargetFrostbite = activePendingCard.template.effectType == CardEffectType.FROSTBITE_TWO ||
+                    activePendingCard.template.effectType == CardEffectType.ANIVIA_CHAMPION_SPELL
+                when {
+                    activePendingCard.template.effectType == CardEffectType.SINGLE_COMBAT_STRIKE ||
+                        activePendingCard.template.effectType == CardEffectType.SACRIFICE_DAMAGE -> {
+                        val allyId = pendingFirstUnitId
+                        if (allyId != null) {
+                            dispatchTargetedCard(activePendingCard, "$allyId|${unit.instanceId}")
+                            pendingTargetCard = null
+                            pendingFirstUnitId = null
+                        }
+                    }
+                    isTwoTargetFrostbite -> {
+                        val enemyCount = combat.enemyBoard.count { it.template.type != CardType.LANDMARK }
+                        val firstId = pendingFirstUnitId
+                        when {
+                            firstId == null && enemyCount <= 1 -> {
+                                dispatchTargetedCard(activePendingCard, unit.instanceId)
+                                pendingTargetCard = null
+                                pendingFirstUnitId = null
+                            }
+                            firstId == null -> {
+                                pendingFirstUnitId = unit.instanceId
+                            }
+                            firstId == unit.instanceId -> {
+                                // Bấm lại mục tiêu #1 để bỏ chọn và chọn lại
+                                pendingFirstUnitId = null
+                            }
+                            else -> {
+                                dispatchTargetedCard(activePendingCard, "$firstId|${unit.instanceId}")
+                                pendingTargetCard = null
+                                pendingFirstUnitId = null
+                            }
+                        }
+                    }
+                    else -> {
+                        dispatchTargetedCard(activePendingCard, unit.instanceId)
                         pendingTargetCard = null
                         pendingFirstUnitId = null
                     }
-                } else {
-                    dispatchTargetedCard(activePendingCard, unit.instanceId)
-                    pendingTargetCard = null
-                    pendingFirstUnitId = null
                 }
             } else if (combat.priorityHolder == PriorityHolder.PLAYER &&
                 combat.phase == CombatPhase.COMBAT_DECLARE_ATTACK_PHASE &&
@@ -1047,7 +1139,9 @@ fun CombatScreen(
         val onPlayerUnitClick: (UnitOnBoard) -> Unit = { unit ->
             inspectedHandCard = null
             if (activePendingCard != null && highlightedTargetAllyIds.contains(unit.instanceId)) {
-                if (activePendingCard.template.effectType == CardEffectType.SINGLE_COMBAT_STRIKE) {
+                if (activePendingCard.template.effectType == CardEffectType.SINGLE_COMBAT_STRIKE ||
+                    activePendingCard.template.effectType == CardEffectType.SACRIFICE_DAMAGE
+                ) {
                     pendingFirstUnitId = unit.instanceId
                 } else {
                     dispatchTargetedCard(activePendingCard, unit.instanceId)
@@ -1175,6 +1269,11 @@ fun CombatScreen(
                 descFontSizeOverride = descFontSize,
                 highlightedTargetEnemyIds = highlightedTargetEnemyIds,
                 highlightedTargetAllyIds = highlightedTargetAllyIds,
+                preselectedTargetIds = if (activePendingCard != null && pendingFirstUnitId != null) {
+                    setOf(pendingFirstUnitId!!)
+                } else {
+                    emptySet()
+                },
                 onPlayerBenchBoundsChanged = { playerBenchBounds = it },
                 onSharedBattlefieldBoundsChanged = { sharedBattlefieldBounds = it },
                 onEnemyAttackerBoundsChanged = { id, rect -> enemyAttackerBounds[id] = rect },
@@ -1758,6 +1857,10 @@ fun CombatScreen(
         val activeChallenger = combat.selectedAttackerForChallenger?.let { cid ->
             combat.playerBoard.find { it.instanceId == cid }
         }
+        val isPendingTwoTargetFrostbite = activePendingCard != null &&
+            (activePendingCard.template.effectType == CardEffectType.FROSTBITE_TWO ||
+                activePendingCard.template.effectType == CardEffectType.ANIVIA_CHAMPION_SPELL)
+        val pendingEnemyTargetCount = combat.enemyBoard.count { it.template.type != CardType.LANDMARK }
         val promptMessage = when {
             activePendingCard != null &&
                 activePendingCard.template.effectType == CardEffectType.SINGLE_COMBAT_STRIKE &&
@@ -1766,6 +1869,23 @@ fun CombatScreen(
             activePendingCard != null &&
                 activePendingCard.template.effectType == CardEffectType.SINGLE_COMBAT_STRIKE ->
                 "Chọn KẺ ĐỊCH đối đầu cho ${activePendingCard.template.name}"
+            activePendingCard != null &&
+                activePendingCard.template.effectType == CardEffectType.SACRIFICE_DAMAGE &&
+                pendingFirstUnitId == null ->
+                "Chọn ĐỒNG MINH để hy sinh cho ${activePendingCard.template.name}"
+            activePendingCard != null &&
+                activePendingCard.template.effectType == CardEffectType.SACRIFICE_DAMAGE ->
+                "Chọn KẺ ĐỊCH gây sát thương cho ${activePendingCard.template.name}"
+            activePendingCard != null && activePendingCard.template.requiresAllySacrificeOnPlay ->
+                "Chọn 1 ĐỒNG MINH để hy sinh khi triệu hồi ${activePendingCard.template.name}"
+            isPendingTwoTargetFrostbite && pendingFirstUnitId == null ->
+                if (pendingEnemyTargetCount <= 1) {
+                    "Chọn 1 KẺ ĐỊCH cho ${activePendingCard.template.name}"
+                } else {
+                    "Chọn KẺ ĐỊCH thứ 1/2 cho ${activePendingCard.template.name}"
+                }
+            isPendingTwoTargetFrostbite && pendingFirstUnitId != null ->
+                "Đã chọn 1/2 — Chọn KẺ ĐỊCH thứ 2 cho ${activePendingCard.template.name}"
             activePendingCard != null && (activePendingCard.template.effectType == CardEffectType.DEAL_DAMAGE_ANY ||
                 activePendingCard.template.effectType == CardEffectType.DRAIN) ->
                 "Chọn QUÂN ĐỊCH hoặc NHÀ CHÍNH ĐỊCH cho ${activePendingCard.template.name}"
@@ -1807,6 +1927,28 @@ fun CombatScreen(
                         fontWeight = FontWeight.Bold,
                         color = ParchmentWhite
                     )
+                    if (isPendingTwoTargetFrostbite && pendingFirstUnitId != null) {
+                        Button(
+                            onClick = {
+                                val firstId = pendingFirstUnitId
+                                if (firstId != null) {
+                                    dispatchTargetedCard(activePendingCard, firstId)
+                                    pendingTargetCard = null
+                                    pendingFirstUnitId = null
+                                }
+                            },
+                            modifier = Modifier
+                                .height(36.dp)
+                                .minimumInteractiveComponentSize()
+                                .testTag("confirm_single_target_button"),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color(0xFF1F4B6E),
+                                contentColor = ParchmentWhite
+                            )
+                        ) {
+                            Text("Chỉ Đóng Băng 1", fontSize = (descFontSize.value * 0.9f).sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
                     if (activePendingCard?.template?.effectType == CardEffectType.DEAL_DAMAGE_ANY ||
                         activePendingCard?.template?.effectType == CardEffectType.DRAIN
                     ) {

@@ -40,19 +40,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.AcUnit
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.FlashOn
 import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.HourglassBottom
-import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.SportsKabaddi
 import androidx.compose.material.icons.outlined.StarOutline
-import androidx.compose.material.icons.outlined.VisibilityOff
-import androidx.compose.material.icons.outlined.Whatshot
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -377,7 +372,7 @@ fun CardTile(
                                 horizontalArrangement = Arrangement.spacedBy(GameSpacing.xs),
                                 verticalArrangement = Arrangement.spacedBy(GameSpacing.xs)
                             ) {
-                                allKeywords.take(2).forEach { kw ->
+                                allKeywords.take(3).forEach { kw ->
                                     val kwColor = when (kw.category) {
                                         KeywordCategory.COMBAT_POSITIVE -> AccentIce
                                         KeywordCategory.NEGATIVE_STATUS -> SemanticDanger
@@ -391,14 +386,24 @@ fun CardTile(
                                         color = SurfaceElevated,
                                         border = BorderStroke(1.dp, kwColor.copy(alpha = 0.5f))
                                     ) {
-                                        Text(
-                                            text = kw.displayName,
-                                            fontFamily = PlusJakartaSansFamily,
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = kwColor,
-                                            modifier = Modifier.padding(horizontal = GameSpacing.xs, vertical = 2.dp)
-                                        )
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = GameSpacing.xs, vertical = 2.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                        ) {
+                                            KeywordIcon(
+                                                keyword = kw,
+                                                size = 13.dp,
+                                                contentDescription = null
+                                            )
+                                            Text(
+                                                text = kw.displayName,
+                                                fontFamily = PlusJakartaSansFamily,
+                                                fontSize = 10.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = kwColor
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -480,6 +485,7 @@ fun CardTile(
             title = kw.displayName + if (kw.isStackable) " (Cộng dồn)" else "",
             subtitle = kw.nameRef,
             description = kw.description,
+            keyword = kw,
             accentColor = when (kw.category) {
                 KeywordCategory.COMBAT_POSITIVE -> AccentIce
                 KeywordCategory.NEGATIVE_STATUS -> SemanticDanger
@@ -505,6 +511,7 @@ fun KeywordTooltipDialog(
     title: String,
     subtitle: String,
     description: String,
+    keyword: Keyword? = null,
     accentColor: Color = AccentGold,
     onDismiss: () -> Unit
 ) {
@@ -514,20 +521,32 @@ fun KeywordTooltipDialog(
         containerColor = SurfaceBase,
         shape = RoundedCornerShape(GameRadius.panel),
         title = {
-            Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.xs)) {
-                Text(
-                    text = title,
-                    fontFamily = CinzelFontFamily,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 16.sp,
-                    color = accentColor
-                )
-                Text(
-                    text = subtitle,
-                    fontFamily = PlusJakartaSansFamily,
-                    fontSize = 11.sp,
-                    color = TextSecondary
-                )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm)
+            ) {
+                if (keyword != null) {
+                    KeywordIcon(
+                        keyword = keyword,
+                        size = 28.dp,
+                        contentDescription = title
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.xs)) {
+                    Text(
+                        text = title,
+                        fontFamily = CinzelFontFamily,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp,
+                        color = accentColor
+                    )
+                    Text(
+                        text = subtitle,
+                        fontFamily = PlusJakartaSansFamily,
+                        fontSize = 11.sp,
+                        color = TextSecondary
+                    )
+                }
             }
         },
         text = {
@@ -815,15 +834,28 @@ fun HandCardView(
                             verticalArrangement = Arrangement.spacedBy(2.dp)
                         ) {
                             if (kwHeader != null) {
-                                Text(
-                                    text = kwHeader,
-                                    fontFamily = PlusJakartaSansFamily,
-                                    fontSize = (infoFontSize.value * 0.94f).coerceAtLeast(7.2f).sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (template.spellSpeed != SpellSpeed.NONE && mergedKeywords.isEmpty()) AccentIce else AccentGold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    mergedKeywords.take(2).forEach { kw ->
+                                        KeywordIcon(
+                                            keyword = kw,
+                                            size = 11.dp,
+                                            contentDescription = null
+                                        )
+                                    }
+                                    Text(
+                                        text = kwHeader,
+                                        fontFamily = PlusJakartaSansFamily,
+                                        fontSize = (infoFontSize.value * 0.94f).coerceAtLeast(7.2f).sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (template.spellSpeed != SpellSpeed.NONE && mergedKeywords.isEmpty()) AccentIce else AccentGold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                                 HorizontalDivider(thickness = 0.6.dp, color = BorderSubtle.copy(alpha = 0.7f))
                             }
                             Text(
@@ -925,14 +957,13 @@ fun HandCardView(
             }
 
             if (handCard.isFleeting) {
-                Icon(
-                    imageVector = Icons.Outlined.HourglassBottom,
-                    contentDescription = "Thoáng chốc",
-                    tint = AccentSpellMana,
+                KeywordIcon(
+                    keyword = Keyword.FLEETING,
+                    size = cardWidth * 0.16f,
+                    contentDescription = Keyword.FLEETING.displayName,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(GameSpacing.xs)
-                        .size(cardWidth * 0.16f)
                 )
             }
         }
@@ -946,6 +977,7 @@ fun UnitToken(
     isAttacking: Boolean = false,
     isBlockingLabel: String? = null,
     isSelected: Boolean = false,
+    isTargetLocked: Boolean = false,
     isValidBlockCandidate: Boolean = false,
     isDragging: Boolean = false,
     tileWidth: Dp = 102.dp,
@@ -999,6 +1031,7 @@ fun UnitToken(
     val isLeveledChampion = isChampion && unit.isLeveledUp
     val targetBorderColor = when {
         damageDelta > 0 -> SemanticDanger
+        isTargetLocked -> AccentGold
         isSelected -> AccentIce
         isAttacking -> SemanticAttack
         isBlockingLabel != null -> SemanticHeal
@@ -1012,7 +1045,9 @@ fun UnitToken(
         animationSpec = tween(durationMillis = 150),
         label = "unit_border_color"
     )
-    val borderWidth = if (isChampion || isSelected || isAttacking || isBlockingLabel != null || isValidBlockCandidate) {
+    val borderWidth = if (isTargetLocked) {
+        2.dp
+    } else if (isChampion || isSelected || isAttacking || isBlockingLabel != null || isValidBlockCandidate) {
         1.5.dp
     } else {
         1.dp
@@ -1023,24 +1058,7 @@ fun UnitToken(
     val statTextSize = (statFontSize.value * 1.0f).coerceIn(11f, 16f).sp
 
     val activeKeywords = remember(unit) {
-        buildList {
-            if (unit.hasBarrier) add(Triple(Icons.Outlined.Shield, AccentGold, "Lá chắn"))
-            if (unit.hasSpellShield) add(Triple(Icons.Outlined.AutoFixHigh, AccentSpellMana, "Khiên phép"))
-            if (unit.isFrostbitten) add(Triple(Icons.Outlined.AcUnit, AccentIce, "Đóng băng"))
-            if (unit.isStunned) add(Triple(Icons.Outlined.FlashOn, SemanticDanger, "Choáng"))
-            if (unit.keywords.contains(Keyword.QUICK_ATTACK) || unit.keywords.contains(Keyword.DOUBLE_ATTACK)) {
-                add(Triple(Icons.Outlined.Bolt, SemanticAttack, "Đánh nhanh"))
-            }
-            if (unit.keywords.contains(Keyword.OVERWHELM)) {
-                add(Triple(Icons.Outlined.Whatshot, SemanticDanger, "Áp đảo"))
-            }
-            if (unit.keywords.contains(Keyword.ELUSIVE)) {
-                add(Triple(Icons.Outlined.VisibilityOff, AccentIce, "Lẩn tránh"))
-            }
-            if (unit.keywords.contains(Keyword.TOUGH) || unit.keywords.contains(Keyword.REGENERATION)) {
-                add(Triple(Icons.Outlined.Shield, SemanticHeal, "Kiên cường/Hồi phục"))
-            }
-        }
+        resolveUnitDisplayKeywords(unit)
     }
 
     Box(
@@ -1222,14 +1240,31 @@ fun UnitToken(
                         modifier = Modifier.size(iconSize)
                     )
                 }
-                activeKeywords.take(2).forEach { (icon, tint, label) ->
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = label,
-                        tint = tint,
-                        modifier = Modifier.size(iconSize)
+                activeKeywords.take(3).forEach { kw ->
+                    KeywordIcon(
+                        keyword = kw,
+                        size = iconSize,
+                        contentDescription = kw.displayName
                     )
                 }
+            }
+        }
+
+        if (isTargetLocked) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 2.dp, end = 2.dp)
+                    .testTag("locked_target_badge_${unit.instanceId}"),
+                shape = CircleShape,
+                color = AccentGold,
+                border = BorderStroke(1.dp, TextPrimary)
+            ) {
+                Text(
+                    text = "1",
+                    style = statNumericStyle((statFontSize.value * 0.78f).coerceAtLeast(9f).sp, BgDeep),
+                    modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                )
             }
         }
 
@@ -1362,17 +1397,27 @@ fun KeywordGlossaryDialog(onDismiss: () -> Unit) {
                 LazyColumn(verticalArrangement = Arrangement.spacedBy(GameSpacing.sm)) {
                     items(filteredKeywords, key = { it.name }) { kw ->
                         Column(verticalArrangement = Arrangement.spacedBy(GameSpacing.xs)) {
-                            Text(
-                                text = kw.displayName + if (kw.isStackable) " (Cộng dồn)" else "",
-                                fontFamily = PlusJakartaSansFamily,
-                                fontWeight = FontWeight.SemiBold,
-                                fontSize = 13.sp,
-                                color = when (kw.category) {
-                                    KeywordCategory.COMBAT_POSITIVE -> AccentIce
-                                    KeywordCategory.NEGATIVE_STATUS -> SemanticDanger
-                                    KeywordCategory.CARD_PROPERTY -> AccentGold
-                                }
-                            )
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(GameSpacing.sm)
+                            ) {
+                                KeywordIcon(
+                                    keyword = kw,
+                                    size = 20.dp,
+                                    contentDescription = kw.displayName
+                                )
+                                Text(
+                                    text = kw.displayName + if (kw.isStackable) " (Cộng dồn)" else "",
+                                    fontFamily = PlusJakartaSansFamily,
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 13.sp,
+                                    color = when (kw.category) {
+                                        KeywordCategory.COMBAT_POSITIVE -> AccentIce
+                                        KeywordCategory.NEGATIVE_STATUS -> SemanticDanger
+                                        KeywordCategory.CARD_PROPERTY -> AccentGold
+                                    }
+                                )
+                            }
                             Text(
                                 text = kw.description,
                                 fontFamily = InterFontFamily,

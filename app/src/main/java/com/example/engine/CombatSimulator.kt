@@ -96,7 +96,11 @@ object CombatSimulator {
         "card_jinx",
         "card_karma",
         "card_viktor",
-        "card_lux"
+        "card_lux",
+        "card_viego",
+        "card_dawnspeakers",
+        "card_invasive_hydravine",
+        "card_fleetfeather_tracker"
     )
 
     /**
@@ -147,6 +151,24 @@ object CombatSimulator {
             effectValue += minOf(2, state.playerBoard.size) * 4.0
         } else if (card.id == "card_brightsteel_protector" && state.enemyBoard.isNotEmpty()) {
             effectValue += 2.5
+        } else if (card.id == "card_laurent_bladekeeper" && state.enemyBoard.isNotEmpty()) {
+            effectValue += 4.0
+        } else if (card.id == "card_tiana_crownguard" && state.enemyBoard.isNotEmpty()) {
+            effectValue += state.enemyBoard.size * 1.5
+        } else if (card.id == "card_camavoran_soldier" || card.id == "card_invasive_hydravine") {
+            effectValue += 3.5 + state.enemyMistStatBonus * 1.5
+        } else if (card.id == "card_fading_icon") {
+            effectValue += 2.2
+        }
+
+        if (card.requiresAllySacrificeOnPlay) {
+            val expendable = state.enemyBoard
+                .filter { it.template.type != CardType.LANDMARK && !it.template.isChampion }
+                .minByOrNull { threatScore(it, state) }
+            if (expendable == null) {
+                return -10.0
+            }
+            effectValue -= threatScore(expendable, state) * 0.7
         }
 
         val baseScore = threatScore(simulatedUnit, state) + effectValue
@@ -186,7 +208,17 @@ object CombatSimulator {
                 CardEffectType.ANIVIA_CHAMPION_SPELL,
                 CardEffectType.DEAL_DAMAGE_ANY,
                 CardEffectType.DEAL_DAMAGE_UNIT_AND_NEXUS,
-                CardEffectType.DRAIN -> entry.targetUnitId == unit.instanceId
+                CardEffectType.DRAIN -> entry.targetUnitId
+                    ?.split("|")
+                    ?.any { it.trim() == unit.instanceId } == true
+                CardEffectType.SACRIFICE_DAMAGE -> {
+                    val parts = entry.targetUnitId?.split("|")
+                    val sacId = parts?.getOrNull(0)?.trim()
+                    val dmgId = parts?.getOrNull(1)?.trim()
+                    (sacId == unit.instanceId && !isHostileToUnit) || (dmgId == unit.instanceId && isHostileToUnit)
+                }
+                CardEffectType.POSSESS_UNIT ->
+                    isHostileToUnit && entry.targetUnitId?.trim() == unit.instanceId
                 else -> false
             }
             if (!hitsUnit) continue
@@ -197,7 +229,7 @@ object CombatSimulator {
             }
 
             when (card.effectType) {
-                CardEffectType.STUN_TARGET, CardEffectType.RECALL_OR_STUN -> {
+                CardEffectType.STUN_TARGET, CardEffectType.RECALL_OR_STUN, CardEffectType.POSSESS_UNIT -> {
                     neutralized = true
                 }
                 CardEffectType.FROSTBITE_TARGET,
@@ -209,24 +241,29 @@ object CombatSimulator {
                 CardEffectType.WINGS_OF_CRYOPHOENIX,
                 CardEffectType.DEAL_DAMAGE_ANY,
                 CardEffectType.DEAL_DAMAGE_UNIT_AND_NEXUS,
-                CardEffectType.DRAIN -> {
-                    val rawDmg = if (state != null) {
-                        CombatEngine.calculateFinalDamage(
-                            baseDamage = card.effectValue,
-                            card = card,
-                            state = state,
-                            sourceIsPlayer = entry.sourceIsPlayer,
-                            extraBonus = entry.damageBonus
-                        )
+                CardEffectType.DRAIN,
+                CardEffectType.SACRIFICE_DAMAGE -> {
+                    if (card.effectType == CardEffectType.SACRIFICE_DAMAGE && !isHostileToUnit) {
+                        hp = 0
                     } else {
-                        card.effectValue + entry.damageBonus
-                    }
-                    if (rawDmg > 0) {
-                        if (hasBarrier) {
-                            hasBarrier = false
+                        val rawDmg = if (state != null) {
+                            CombatEngine.calculateFinalDamage(
+                                baseDamage = card.effectValue,
+                                card = card,
+                                state = state,
+                                sourceIsPlayer = entry.sourceIsPlayer,
+                                extraBonus = entry.damageBonus
+                            )
                         } else {
-                            val afterTough = if (isTough) maxOf(0, rawDmg - 1) else rawDmg
-                            hp -= afterTough
+                            card.effectValue + entry.damageBonus
+                        }
+                        if (rawDmg > 0) {
+                            if (hasBarrier) {
+                                hasBarrier = false
+                            } else {
+                                val afterTough = if (isTough) maxOf(0, rawDmg - 1) else rawDmg
+                                hp -= afterTough
+                            }
                         }
                     }
                 }

@@ -219,8 +219,12 @@ object EnemyAIController {
                 }
                 CardEffectType.STUN_TARGET,
                 CardEffectType.FROSTBITE_TARGET,
-                CardEffectType.FROSTBITE_TWO -> {
-                    val lethalAttackers = playerAttackers.filter { !it.isStunned && (spell.effectType == CardEffectType.STUN_TARGET || !it.isFrostbitten) }
+                CardEffectType.FROSTBITE_TWO,
+                CardEffectType.ANIVIA_CHAMPION_SPELL -> {
+                    val isStun = spell.effectType == CardEffectType.STUN_TARGET
+                    val isTwoTarget = spell.effectType == CardEffectType.FROSTBITE_TWO ||
+                        spell.effectType == CardEffectType.ANIVIA_CHAMPION_SPELL
+                    val lethalAttackers = playerAttackers.filter { !it.isStunned && (isStun || !it.isFrostbitten) }
                     val candidate = if (isPlayerThreateningLethal && lethalAttackers.isNotEmpty()) {
                         lethalAttackers.maxByOrNull { CombatSimulator.simulatePair(it, null, state.spellStack, state).damageToDefenderNexus }
                     } else if (threatenedHighValueUnit != null) {
@@ -228,7 +232,7 @@ object EnemyAIController {
                         val combatAttackerId = state.blockPairings.entries
                             .firstOrNull { it.value == threatenedHighValueUnit.instanceId }?.key
                         state.playerBoard.find { it.instanceId == combatAttackerId }
-                            ?.takeIf { !it.isStunned && (spell.effectType == CardEffectType.STUN_TARGET || !it.isFrostbitten) }
+                            ?.takeIf { !it.isStunned && (isStun || !it.isFrostbitten) }
                     } else if (lethalAttackers.isNotEmpty()) {
                         lethalAttackers.maxByOrNull { CombatSimulator.threatScore(it, state) }
                     } else if (isInCombat && !state.playerInitiatedCombat) {
@@ -236,22 +240,31 @@ object EnemyAIController {
                         val blockerTargets = state.blockPairings.values
                             .mapNotNull { id -> state.playerBoard.find { it.instanceId == id } }
                         (blockerTargets.ifEmpty { state.playerBoard })
-                            .filter { !it.isStunned && (spell.effectType == CardEffectType.STUN_TARGET || !it.isFrostbitten) }
+                            .filter { !it.isStunned && (isStun || !it.isFrostbitten) }
                             .maxByOrNull { CombatSimulator.threatScore(it, state) }
                     } else null
 
                     if (candidate != null) {
-                        chosenTargetId = candidate.instanceId
+                        chosenTargetId = if (isTwoTarget) {
+                            val secondPool = (lethalAttackers + state.playerBoard)
+                                .distinctBy { it.instanceId }
+                                .filter { it.instanceId != candidate.instanceId && !it.isStunned && !it.isFrostbitten }
+                                .maxByOrNull { CombatSimulator.threatScore(it, state) }
+                            listOfNotNull(candidate.instanceId, secondPool?.instanceId).joinToString("|")
+                        } else {
+                            candidate.instanceId
+                        }
                         true
                     } else false
                 }
                 CardEffectType.DEAL_DAMAGE_ANY,
                 CardEffectType.DRAIN -> {
+                    val effDmg = CombatEngine.calculateFinalDamage(spell.effectValue, spell, state, sourceIsPlayer = false)
                     val killableAttacker = playerAttackers
-                        .filter { !it.hasBarrier && !it.hasSpellShield && it.health <= spell.effectValue }
+                        .filter { !it.hasBarrier && !it.hasSpellShield && it.health <= effDmg }
                         .maxByOrNull { CombatSimulator.threatScore(it, state) }
                     val highValueKill = state.playerBoard
-                        .filter { !it.hasBarrier && !it.hasSpellShield && it.health <= spell.effectValue }
+                        .filter { !it.hasBarrier && !it.hasSpellShield && it.health <= effDmg }
                         .filter { CombatSimulator.threatScore(it, state) >= spell.cost * 1.2 || isPlayerThreateningLethal }
                         .maxByOrNull { CombatSimulator.threatScore(it, state) }
 
@@ -259,8 +272,22 @@ object EnemyAIController {
                     if (chosen != null) {
                         chosenTargetId = chosen.instanceId
                         true
-                    } else if (state.playerNexusHp <= spell.effectValue) {
+                    } else if (state.playerNexusHp <= effDmg) {
                         chosenTargetId = "PLAYER_NEXUS"
+                        true
+                    } else false
+                }
+                CardEffectType.SACRIFICE_DAMAGE -> {
+                    val sacrificeAlly = pickExpendableAiSacrifice(state)
+                    val effDmg = CombatEngine.calculateFinalDamage(spell.effectValue, spell, state, sourceIsPlayer = false)
+                    val targetEnemy = (playerAttackers + state.playerBoard)
+                        .distinctBy { it.instanceId }
+                        .filter { it.template.type != CardType.LANDMARK && !it.hasSpellShield && (it.health <= effDmg || isPlayerThreateningLethal) }
+                        .maxByOrNull { CombatSimulator.threatScore(it, state) }
+                    if (sacrificeAlly != null && targetEnemy != null &&
+                        (CombatSimulator.threatScore(targetEnemy, state) > CombatSimulator.threatScore(sacrificeAlly, state) || isPlayerThreateningLethal)
+                    ) {
+                        chosenTargetId = "${sacrificeAlly.instanceId}|${targetEnemy.instanceId}"
                         true
                     } else false
                 }
@@ -351,13 +378,21 @@ object EnemyAIController {
             val enemyRegularAvail = state.enemyMana.coerceIn(0, 10)
             val playableUnits = state.enemyHand.filter {
                 (it.type == CardType.UNIT || it.type == CardType.CHAMPION || it.type == CardType.LANDMARK) &&
-                    it.cost <= enemyRegularAvail
+                    it.cost <= enemyRegularAvail &&
+                    (!it.requiresAllySacrificeOnPlay || pickExpendableAiSacrifice(state) != null)
             }
             val bestUnit = playableUnits.maxByOrNull { card ->
                 CombatSimulator.playValue(card, state)
             }
-            if (bestUnit != null) {
-                val summoned = CombatEngine.summonEnemyUnitFromPool(state, bestUnit, bestUnit.cost, logs)
+            if (bestUnit != null && CombatSimulator.playValue(bestUnit, state) > 0.0) {
+                val sacId = if (bestUnit.requiresAllySacrificeOnPlay) pickExpendableAiSacrifice(state)?.instanceId else null
+                val summoned = CombatEngine.summonEnemyUnitFromPool(
+                    state = state,
+                    chosen = bestUnit,
+                    spendMana = bestUnit.cost,
+                    logs = logs,
+                    sacrificeTargetId = sacId
+                )
                 return CombatEngine.checkGameOver(
                     summoned.copy(
                         consecutivePasses = 0,
@@ -419,13 +454,21 @@ object EnemyAIController {
                 return@filter atk.strikePower > 0 || atk.impactStacks > 0
             }
 
-            // Nếu có Thách Đấu, AI có quyền tự chọn mục tiêu kéo lợi nhất
+            // Nếu có Thách Đấu, AI có quyền tự chọn mục tiêu kéo lợi nhất (có xét Thời Khắc Đối Đầu)
             if (!atk.isSilenced && atk.keywords.contains(Keyword.CHALLENGER)) {
                 val challengeTargets = state.playerBoard.filter {
                     it.template.type != CardType.LANDMARK && !it.isStunned && !it.isShackled
                 }
+                val simAtk = if (CombatEngine.canonicalEnemyPowerKey(state.encounterNode.enemyPowerTitle) == "FIORA_SHOWDOWN") {
+                    atk.copy(
+                        power = atk.power + 2,
+                        health = atk.health + 2,
+                        maxHealth = atk.maxHealth + 2,
+                        keywords = atk.keywords + Keyword.TOUGH
+                    )
+                } else atk
                 val goodPull = challengeTargets.any { target ->
-                    val sim = CombatSimulator.simulatePair(atk, target, state.spellStack, state)
+                    val sim = CombatSimulator.simulatePair(simAtk, target, state.spellStack, state)
                     !sim.attackerDies || (sim.blockerDies && CombatSimulator.threatScore(target, state) > atkScore)
                 }
                 if (goodPull) return@filter true
@@ -459,20 +502,7 @@ object EnemyAIController {
     ): CombatState {
         var s = state
 
-        // 1. Hallowed leftmost buff (round-scoped, runs before Support)
-        if (s.enemyHallowedStacks > 0 && chosenIds.isNotEmpty()) {
-            val firstId = chosenIds.first()
-            val firstUnit = s.enemyBoard.find { it.instanceId == firstId }
-            s = CombatEngine.recordRoundHallowedBuff(s, firstId, s.enemyHallowedStacks)
-            s = s.copy(enemyBoard = s.enemyBoard.map {
-                if (it.instanceId == firstId) it.copy(power = it.power + s.enemyHallowedStacks) else it
-            })
-            if (firstUnit != null) {
-                logs.add("Thiêng Liêng ban cho ${firstUnit.template.name} +${s.enemyHallowedStacks}|+0!")
-            }
-        }
-
-        // 2. AI Lurk
+        // 1. AI Lurk
         val hasLurkAttacker = s.enemyBoard.any { chosenIds.contains(it.instanceId) && !it.isSilenced && it.keywords.contains(Keyword.LURK) }
         val topEnemyIsLurk = s.enemyDrawPool.firstOrNull()?.keywords?.contains(Keyword.LURK) == true
         if (!s.enemyLurkTriggeredThisRound && hasLurkAttacker && topEnemyIsLurk) {
@@ -503,12 +533,22 @@ object EnemyAIController {
             .filter { it.template.type != CardType.LANDMARK && !it.isStunned && !it.isShackled }
             .toMutableList()
 
+        val isFioraShowdown = CombatEngine.canonicalEnemyPowerKey(s.encounterNode.enemyPowerTitle) == "FIORA_SHOWDOWN"
         for (atkId in chosenIds) {
             val atk = s.enemyBoard.find { it.instanceId == atkId } ?: continue
             val atkScore = CombatSimulator.threatScore(atk, s)
-            val target = if (!atk.isSilenced && atk.keywords.contains(Keyword.CHALLENGER)) {
+            val isChallenger = !atk.isSilenced && atk.keywords.contains(Keyword.CHALLENGER)
+            val simAtk = if (isChallenger && isFioraShowdown) {
+                atk.copy(
+                    power = atk.power + 2,
+                    health = atk.health + 2,
+                    maxHealth = atk.maxHealth + 2,
+                    keywords = atk.keywords + Keyword.TOUGH
+                )
+            } else atk
+            val target = if (isChallenger) {
                 val killableTargets = availablePlayerTargets.filter { p ->
-                    val sim = CombatSimulator.simulatePair(atk, p, s.spellStack, s)
+                    val sim = CombatSimulator.simulatePair(simAtk, p, s.spellStack, s)
                     sim.blockerDies && (!sim.attackerDies || CombatSimulator.threatScore(p, s) >= atkScore)
                 }
                 if (atk.keywords.contains(Keyword.OVERWHELM)) {
@@ -519,7 +559,7 @@ object EnemyAIController {
                     // Thách Đấu thường: kéo mục tiêu ThreatScore cao nhất mà AI tiêu diệt được
                     killableTargets.maxByOrNull { CombatSimulator.threatScore(it, s) }
                         ?: availablePlayerTargets
-                            .filter { it.template.isChampion && CombatSimulator.simulatePair(atk, it, s.spellStack, s).blockerDies }
+                            .filter { it.template.isChampion && CombatSimulator.simulatePair(simAtk, it, s.spellStack, s).blockerDies }
                             .maxByOrNull { CombatSimulator.threatScore(it, s) }
                 }
             } else {
@@ -532,6 +572,9 @@ object EnemyAIController {
                 aiChallenges[atkId] = target.instanceId
                 availablePlayerTargets.remove(target)
                 logs.add("${atk.template.name} kéo ${target.template.name} vào chặn!")
+                if (isChallenger && isFioraShowdown) {
+                    s = CombatEngine.grantEnemyChallengerShowdownBuff(s, atkId, logs)
+                }
             }
         }
 
@@ -721,19 +764,41 @@ object EnemyAIController {
             when (spell.effectType) {
                 CardEffectType.DEAL_DAMAGE_ANY,
                 CardEffectType.DRAIN -> {
-                    if (state.playerNexusHp <= spell.effectValue) return spell to "PLAYER_NEXUS"
+                    val effDmg = CombatEngine.calculateFinalDamage(spell.effectValue, spell, state, sourceIsPlayer = false)
+                    if (state.playerNexusHp <= effDmg) return spell to "PLAYER_NEXUS"
                     val bestTarget = state.playerBoard
-                        .filter { !it.hasBarrier && !it.hasSpellShield && it.health <= spell.effectValue }
+                        .filter { !it.hasBarrier && !it.hasSpellShield && it.health <= effDmg }
                         .filter { CombatSimulator.threatScore(it, state) >= spell.cost * 1.2 || state.enemyHasAttackToken }
                         .maxByOrNull { CombatSimulator.threatScore(it, state) }
                     if (bestTarget != null) return spell to bestTarget.instanceId
                 }
                 CardEffectType.DEAL_DAMAGE_UNIT_AND_NEXUS,
                 CardEffectType.DEAL_DAMAGE_NEXUS -> {
-                    if (state.playerNexusHp <= spell.effectValue ||
-                        state.playerBoard.any { it.health <= spell.effectValue }
+                    val effDmg = CombatEngine.calculateFinalDamage(spell.effectValue, spell, state, sourceIsPlayer = false)
+                    if (state.playerNexusHp <= effDmg ||
+                        state.playerBoard.any { it.health <= effDmg }
                     ) {
                         return spell to null
+                    }
+                }
+                CardEffectType.SACRIFICE_DAMAGE -> {
+                    val sacrificeAlly = pickExpendableAiSacrifice(state)
+                    val effDmg = CombatEngine.calculateFinalDamage(spell.effectValue, spell, state, sourceIsPlayer = false)
+                    if (sacrificeAlly != null) {
+                        val bestEnemy = state.playerBoard
+                            .filter { it.template.type != CardType.LANDMARK && !it.hasSpellShield && it.health <= effDmg }
+                            .filter { CombatSimulator.threatScore(it, state) > CombatSimulator.threatScore(sacrificeAlly, state) }
+                            .maxByOrNull { CombatSimulator.threatScore(it, state) }
+                        if (bestEnemy != null) return spell to "${sacrificeAlly.instanceId}|${bestEnemy.instanceId}"
+                    }
+                }
+                CardEffectType.POSSESS_UNIT -> {
+                    if (state.enemyBoard.size < 6) {
+                        val stealTarget = state.playerBoard
+                            .filter { it.template.type != CardType.LANDMARK && !it.hasSpellShield }
+                            .filter { CombatSimulator.threatScore(it, state) >= spell.cost * 1.2 }
+                            .maxByOrNull { CombatSimulator.threatScore(it, state) }
+                        if (stealTarget != null) return spell to stealTarget.instanceId
                     }
                 }
                 CardEffectType.STUN_TARGET,
@@ -743,6 +808,19 @@ object EnemyAIController {
                         .filter { CombatSimulator.threatScore(it, state) >= spell.cost * 1.3 || state.enemyHasAttackToken }
                         .maxByOrNull { CombatSimulator.threatScore(it, state) }
                     if (bestTarget != null) return spell to bestTarget.instanceId
+                }
+                CardEffectType.FROSTBITE_TWO,
+                CardEffectType.ANIVIA_CHAMPION_SPELL -> {
+                    val eligible = state.playerBoard
+                        .filter { !it.isStunned && !it.isFrostbitten }
+                        .sortedByDescending { CombatSimulator.threatScore(it, state) }
+                    val bestPrimary = eligible.firstOrNull {
+                        CombatSimulator.threatScore(it, state) >= spell.cost * 1.1 || state.enemyHasAttackToken
+                    }
+                    if (bestPrimary != null) {
+                        val picked = eligible.take(2).joinToString("|") { it.instanceId }
+                        return spell to picked
+                    }
                 }
                 CardEffectType.GIVE_BARRIER_AND_DRAW,
                 CardEffectType.RALLY_AND_SHIELD -> {
@@ -798,29 +876,56 @@ object EnemyAIController {
                 }
                 CardEffectType.STUN_TARGET,
                 CardEffectType.FROSTBITE_TARGET,
-                CardEffectType.FROSTBITE_TWO -> {
+                CardEffectType.FROSTBITE_TWO,
+                CardEffectType.ANIVIA_CHAMPION_SPELL -> {
+                    val isStun = spell.effectType == CardEffectType.STUN_TARGET
+                    val isTwoTarget = spell.effectType == CardEffectType.FROSTBITE_TWO ||
+                        spell.effectType == CardEffectType.ANIVIA_CHAMPION_SPELL
                     val targets = if (playerIsAttacking) {
                         state.attackingUnitIds.mapNotNull { id -> state.playerBoard.find { it.instanceId == id } }
                     } else {
                         state.playerBoard
                     }
-                    val chosen = targets
-                        .filter { !it.isStunned && (spell.effectType == CardEffectType.STUN_TARGET || !it.isFrostbitten) }
-                        .maxByOrNull { CombatSimulator.threatScore(it, state) }
-                    if (chosen != null) return spell to chosen.instanceId
+                    val ranked = targets
+                        .filter { !it.isStunned && (isStun || !it.isFrostbitten) }
+                        .sortedByDescending { CombatSimulator.threatScore(it, state) }
+                    if (ranked.isNotEmpty()) {
+                        val chosenId = if (isTwoTarget) {
+                            ranked.take(2).joinToString("|") { it.instanceId }
+                        } else {
+                            ranked.first().instanceId
+                        }
+                        return spell to chosenId
+                    }
                 }
                 CardEffectType.DEAL_DAMAGE_ANY,
                 CardEffectType.DRAIN -> {
+                    val effDmg = CombatEngine.calculateFinalDamage(spell.effectValue, spell, state, sourceIsPlayer = false)
                     val killable = state.playerBoard
-                        .filter { !it.hasBarrier && !it.hasSpellShield && it.health <= spell.effectValue }
+                        .filter { !it.hasBarrier && !it.hasSpellShield && it.health <= effDmg }
                         .maxByOrNull { CombatSimulator.threatScore(it, state) }
                     if (killable != null) return spell to killable.instanceId
-                    if (state.playerNexusHp <= spell.effectValue) return spell to "PLAYER_NEXUS"
+                    if (state.playerNexusHp <= effDmg) return spell to "PLAYER_NEXUS"
                     if (!playerIsAttacking && state.blockCommitted) {
                         val barrierBlocker = state.blockPairings.values.firstOrNull { blkId ->
                             state.playerBoard.any { p -> p.instanceId == blkId && p.hasBarrier }
                         }
                         if (barrierBlocker != null) return spell to barrierBlocker
+                    }
+                }
+                CardEffectType.SACRIFICE_DAMAGE -> {
+                    val sacrificeAlly = pickExpendableAiSacrifice(state)
+                    val effDmg = CombatEngine.calculateFinalDamage(spell.effectValue, spell, state, sourceIsPlayer = false)
+                    if (sacrificeAlly != null) {
+                        val targets = if (playerIsAttacking) {
+                            state.attackingUnitIds.mapNotNull { id -> state.playerBoard.find { it.instanceId == id } }
+                        } else {
+                            state.playerBoard
+                        }
+                        val bestEnemy = targets
+                            .filter { it.template.type != CardType.LANDMARK && !it.hasSpellShield && it.health <= effDmg }
+                            .maxByOrNull { CombatSimulator.threatScore(it, state) }
+                        if (bestEnemy != null) return spell to "${sacrificeAlly.instanceId}|${bestEnemy.instanceId}"
                     }
                 }
                 CardEffectType.SINGLE_COMBAT_STRIKE -> {
@@ -835,6 +940,16 @@ object EnemyAIController {
             }
         }
         return null
+    }
+
+    private fun pickExpendableAiSacrifice(state: CombatState): UnitOnBoard? {
+        return state.enemyBoard
+            .filter { it.template.type != CardType.LANDMARK && !it.template.isChampion }
+            .minWithOrNull(
+                compareBy<UnitOnBoard> { if (it.keywords.contains(Keyword.EPHEMERAL)) 0 else 1 }
+                    .thenBy { if (it.template.id == "card_hapless_aristocrat") 0 else 1 }
+                    .thenBy { CombatSimulator.threatScore(it, state) }
+            )
     }
 
     private fun castEnemySpell(
